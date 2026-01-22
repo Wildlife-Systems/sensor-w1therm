@@ -1,0 +1,82 @@
+.TH SENSOR-DS18B20 1 "October 2025" "sensor-ds18b20 1.0" "WildlifeSystems"
+.SH NAME
+sensor-ds18b20 \- read DS18B20 1-Wire temperature sensors
+.SH SYNOPSIS
+.B sensor-ds18b20
+[\fBidentify\fR|\fBlist\fR]
+.SH DESCRIPTION
+.B sensor-ds18b20
+reads temperature data from DS18B20 1-Wire temperature sensors connected to the system.
+The command scans for all DS18B20 sensors (device ID starting with 28-) on the 1-Wire bus
+and outputs their readings in JSON format compatible with the WildlifeSystems sensor-control framework.
+.PP
+The 1-Wire interface must be enabled in the Raspberry Pi configuration (typically via
+dtoverlay=w1-gpio in /boot/config.txt or /boot/firmware/config.txt) before sensors can be detected.
+.SH OPTIONS
+.TP
+.B identify
+Returns exit code 60 to identify this sensor type to the WildlifeSystems framework.
+.TP
+.B list
+Lists the measurement types supported by this sensor. For DS18B20, this outputs "temperature".
+.SH OUTPUT FORMAT
+When run without arguments, the command outputs a JSON array containing sensor readings.
+Each sensor reading includes:
+.PP
+.RS
+.IP \(bu 2
+sensor: The sensor type ("ds18b20")
+.IP \(bu 2
+measures: The measurement type ("temperature")
+.IP \(bu 2
+unit: The unit of measurement ("Celsius")
+.IP \(bu 2
+value: The temperature reading in degrees Celsius
+.IP \(bu 2
+sensor_id: The unique 1-Wire device ID
+.IP \(bu 2
+error: (optional) Error message if reading failed
+.RE
+.SH EXAMPLES
+.TP
+Read all connected DS18B20 sensors:
+.B sensor-ds18b20
+.TP
+List supported measurements:
+.B sensor-ds18b20 list
+.TP
+Identify sensor type (for sensor-control integration):
+.B sensor-ds18b20 identify
+.SH FILES
+.TP
+.I /sys/bus/w1/devices/28-*/w1_slave
+1-Wire device interface files where temperature readings are obtained.
+.TP
+.I /sys/bus/w1/devices/28-*/temperature
+Alternative sysfs entry providing direct temperature reading in millidegrees.
+.TP
+.I /boot/config.txt
+or
+.I /boot/firmware/config.txt
+Raspberry Pi configuration file where 1-Wire interface is enabled.
+.SH EXIT STATUS
+.TP
+.B 0
+Success
+.TP
+.B 60
+Returned when called with 'identify' option
+.SH SEE ALSO
+.BR sensor-control (1)
+.SH REFERENCES
+.TP
+Kernel w1_therm driver documentation:
+https://docs.kernel.org/w1/slaves/w1_therm.html
+.SH AUTHOR
+Ed Baker <ed@ebaker.me.uk>
+.SH PROJECT
+Part of the WildlifeSystems project. For more information, visit:
+.br
+https://wildlife.systems
+.br
+https://docs.wildlife.systems

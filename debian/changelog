@@ -1,0 +1,8 @@
+sensor-ds18b20 (1.0.0) stable; urgency=medium
+
+  * Initial C implementation
+  * Parallel sensor reading using pthreads
+  * Supports w1_slave and temperature sysfs interfaces
+  * Compatible JSON output format with bash version
+
+ -- Ed Baker <ed@ebaker.me.uk>  Wed, 22 Jan 2026 12:00:00 +0000
