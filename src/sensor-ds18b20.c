@@ -126,45 +126,40 @@ static int is_w1therm_folder(const struct dirent *entry) {
  * Trigger bulk read on a w1_bus_master
  * This sends the convert command to ALL sensors on the bus simultaneously,
  * which is much faster than reading each sensor individually.
+ * 
+ * Note: The write blocks until conversion is complete (~750ms for 12-bit).
  */
 static int trigger_bulk_read(const char *master_path) {
     char file_path[MAX_PATH_LEN];
     int fd;
     ssize_t written;
-    struct timeval tv_start, tv_end;
 
     snprintf(file_path, sizeof(file_path), "%s/therm_bulk_read", master_path);
 
     fd = open(file_path, O_WRONLY | O_SYNC);
     if (fd < 0) {
-        fprintf(stderr, "Debug: trigger_bulk_read: open failed: %s\n", strerror(errno));
         return -1;  /* Bulk read not supported or permission denied */
     }
 
-    gettimeofday(&tv_start, NULL);
+    /* Write "trigger\n" - the newline is required */
     written = write(fd, "trigger\n", 8);
-    fsync(fd);  /* Force sync to kernel */
-    gettimeofday(&tv_end, NULL);
-    
-    long write_ms = (tv_end.tv_sec - tv_start.tv_sec) * 1000 + 
-                    (tv_end.tv_usec - tv_start.tv_usec) / 1000;
-    fprintf(stderr, "Debug: trigger write took %ldms\n", write_ms);
+    fsync(fd);
+    close(fd);
 
     if (written != 8) {
-        fprintf(stderr, "Debug: trigger_bulk_read: write failed: %s (wrote %zd)\n", 
-                strerror(errno), written);
-        close(fd);
         return -1;
     }
 
-    close(fd);
-    fprintf(stderr, "Debug: trigger_bulk_read: wrote 'trigger' successfully\n");
     return 0;
 }
 
 /*
  * Poll for bulk read completion
  * Returns: 0 = no bulk read pending, 1 = complete, -1 = still in progress
+ * 
+ * Note: Since trigger_bulk_read() blocks until conversion is complete,
+ * this function is mainly useful for checking status when trigger
+ * was initiated externally or for non-blocking scenarios.
  */
 static int poll_bulk_read(const char *master_path) {
     char file_path[MAX_PATH_LEN];
@@ -175,49 +170,32 @@ static int poll_bulk_read(const char *master_path) {
 
     fp = fopen(file_path, "r");
     if (!fp) {
-        fprintf(stderr, "Debug: poll_bulk_read: cannot open file\n");
         return 0;  /* No bulk read support */
     }
 
     if (fscanf(fp, "%d", &status) != 1) {
-        fprintf(stderr, "Debug: poll_bulk_read: fscanf failed\n");
         fclose(fp);
         return 0;
     }
 
     fclose(fp);
-    fprintf(stderr, "Debug: poll_bulk_read status = %d\n", status);
     return status;
 }
 
-/*
- * Wait for bulk read to complete with timeout
- * Returns 0 on success, -1 on timeout
- */
+/* Unused but kept for potential non-blocking scenarios */
+__attribute__((unused))
 static int wait_for_bulk_read(const char *master_path, int timeout_ms) {
     int elapsed = 0;
     int poll_interval_us = 10000;  /* 10ms poll interval */
     int status;
 
-    /* Small delay to let kernel process the trigger */
-    usleep(1000);  /* 1ms */
-
     while (elapsed < timeout_ms) {
         status = poll_bulk_read(master_path);
-        /* status: -1 = still converting, 0 = no pending, 1 = complete */
         if (status == 1) {
-            return 0;  /* Conversion complete, values ready */
+            return 0;  /* Conversion complete */
         }
         if (status == 0) {
-            /* No conversion pending - either finished or never started */
-            /* Give it a moment and check again */
-            usleep(poll_interval_us);
-            status = poll_bulk_read(master_path);
-            if (status == 1) {
-                return 0;
-            }
-            /* Still 0 - conversion may have already completed and been read */
-            return 0;
+            return 0;  /* No conversion pending */
         }
         /* status == -1: still in progress */
         usleep(poll_interval_us);
@@ -388,7 +366,6 @@ static void *read_sensor_thread(void *arg) {
     sensor_result_t *result = args->result;
     long temp_raw = 0;
     char *sensor_id;
-    struct timeval tv_start, tv_end;
 
     /* Extract sensor ID from folder path */
     sensor_id = strrchr(args->folder_path, '/');
@@ -404,12 +381,9 @@ static void *read_sensor_thread(void *arg) {
     strncpy(result->sensor_type, get_sensor_type(sensor_id), sizeof(result->sensor_type) - 1);
     result->sensor_type[sizeof(result->sensor_type) - 1] = '\0';
 
-    gettimeofday(&tv_start, NULL);
-
     /* Try reading from temperature file first (simpler interface) */
     if (read_temperature_file(args->folder_path, &temp_raw) != 0) {
         /* Fall back to w1_slave file */
-        fprintf(stderr, "Debug: temperature file failed for %s, trying w1_slave\n", sensor_id);
         if (read_w1_slave(args->folder_path, &temp_raw) != 0) {
             result->has_error = 1;
             snprintf(result->error_msg, sizeof(result->error_msg), "Failed to read sensor");
@@ -417,11 +391,6 @@ static void *read_sensor_thread(void *arg) {
             return NULL;
         }
     }
-
-    gettimeofday(&tv_end, NULL);
-    long read_ms = (tv_end.tv_sec - tv_start.tv_sec) * 1000 + 
-                   (tv_end.tv_usec - tv_start.tv_usec) / 1000;
-    fprintf(stderr, "Debug: Read %s took %ldms\n", sensor_id, read_ms);
 
     result->valid = 1;
 
@@ -592,36 +561,19 @@ int main(int argc, char *argv[]) {
      * Reading N sensors = 750ms + N * (fast read time)
      * 
      * This is dramatically faster for multiple sensors!
+     * 
+     * Note: The trigger write blocks until conversion is complete, so no
+     * additional polling is needed.
      */
     master_count = find_masters(masters, 8);
-
-    if (master_count == 0) {
-        fprintf(stderr, "Warning: No w1_bus_master found, falling back to sequential reads\n");
-    }
-
-    struct timeval tv_start, tv_end;
-    gettimeofday(&tv_start, NULL);
     
     if (master_count > 0) {
-        /* Trigger bulk conversion on all masters */
+        /* Trigger bulk conversion on all masters - this blocks until complete */
         for (i = 0; i < master_count; i++) {
             if (trigger_bulk_read(masters[i]) == 0) {
                 bulk_read_triggered = 1;
-                fprintf(stderr, "Debug: Bulk read triggered on %s\n", masters[i]);
             } else {
-                fprintf(stderr, "Warning: Failed to trigger bulk read on %s\n", masters[i]);
-            }
-        }
-
-        if (bulk_read_triggered) {
-            /* Wait for all conversions to complete (max 1000ms for 12-bit resolution) */
-            for (i = 0; i < master_count; i++) {
-                int wait_result = wait_for_bulk_read(masters[i], 1000);
-                gettimeofday(&tv_end, NULL);
-                long elapsed_ms = (tv_end.tv_sec - tv_start.tv_sec) * 1000 + 
-                                  (tv_end.tv_usec - tv_start.tv_usec) / 1000;
-                fprintf(stderr, "Debug: wait_for_bulk_read returned %d after %ldms\n", 
-                        wait_result, elapsed_ms);
+                fprintf(stderr, "Warning: Failed to trigger bulk read on %s (may need root)\n", masters[i]);
             }
         }
     }
