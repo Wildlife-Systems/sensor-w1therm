@@ -1,0 +1,14 @@
+[Unit]
+Description=Configure w1_therm sensors for fast reading
+Documentation=man:sensor-ds18b20(1)
+After=multi-user.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/sensor-w1therm setup
+RemainAfterExit=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

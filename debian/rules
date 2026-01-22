@@ -1,13 +1,15 @@
 #!/usr/bin/make -f
 
 %:
-	dh $@
+	dh $@ --with systemd
 
 override_dh_auto_build:
 	$(MAKE)
 
 override_dh_auto_install:
 	$(MAKE) install DESTDIR=$(CURDIR)/debian/sensor-ds18b20
+	mkdir -p $(CURDIR)/debian/sensor-ds18b20/lib/systemd/system
+	cp debian/sensor-w1therm.service $(CURDIR)/debian/sensor-ds18b20/lib/systemd/system/
 
 override_dh_auto_clean:
 	$(MAKE) clean
