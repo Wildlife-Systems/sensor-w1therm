@@ -549,12 +549,18 @@ int main(int argc, char *argv[]) {
      * This is dramatically faster for multiple sensors!
      */
     master_count = find_masters(masters, 8);
+
+    if (master_count == 0) {
+        fprintf(stderr, "Warning: No w1_bus_master found, falling back to sequential reads\n");
+    }
     
     if (master_count > 0) {
         /* Trigger bulk conversion on all masters */
         for (i = 0; i < master_count; i++) {
             if (trigger_bulk_read(masters[i]) == 0) {
                 bulk_read_triggered = 1;
+            } else {
+                fprintf(stderr, "Warning: Failed to trigger bulk read on %s\n", masters[i]);
             }
         }
 
