@@ -542,9 +542,10 @@ static void print_sensor_json(const sensor_result_t *result, int is_first, const
     if (result->has_error) {
         json_escape_string(result->error_msg, escaped_error, sizeof(escaped_error));
         json_replace_null_string(json, "error", escaped_error);
-    } else {
-        json_replace_null_number(json, "value", result->temperature);
     }
+    
+    /* Always output value if we have a temperature reading */
+    json_replace_null_number(json, "value", result->temperature);
 
     printf("%s", json);
 }
