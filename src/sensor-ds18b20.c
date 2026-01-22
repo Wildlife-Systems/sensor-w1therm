@@ -433,9 +433,93 @@ static void json_escape_string(const char *src, char *dest, size_t dest_size) {
 }
 
 /*
- * Print a single sensor result as JSON
+ * Call sc-prototype to get the JSON template
+ * Returns 0 on success, -1 on failure
  */
-static void print_sensor_json(const sensor_result_t *result, int is_first) {
+static int get_sc_prototype(char *buffer, size_t bufsize) {
+    FILE *fp;
+    char *newline;
+
+    fp = popen("sc-prototype", "r");
+    if (fp == NULL) {
+        return -1;
+    }
+
+    if (fgets(buffer, bufsize, fp) == NULL) {
+        pclose(fp);
+        return -1;
+    }
+
+    pclose(fp);
+
+    /* Remove trailing newline */
+    newline = strchr(buffer, '\n');
+    if (newline) {
+        *newline = '\0';
+    }
+
+    return 0;
+}
+
+/*
+ * Replace a JSON null value with a string value
+ * e.g. "sensor":null -> "sensor":"ds18b20"
+ */
+static void json_replace_null_string(char *json, const char *key, const char *value) {
+    char search[128];
+    char replace[256];
+    char *pos;
+    size_t search_len, replace_len, tail_len;
+
+    snprintf(search, sizeof(search), "\"%s\":null", key);
+    snprintf(replace, sizeof(replace), "\"%s\":\"%s\"", key, value);
+
+    pos = strstr(json, search);
+    if (pos == NULL) {
+        return;
+    }
+
+    search_len = strlen(search);
+    replace_len = strlen(replace);
+    tail_len = strlen(pos + search_len);
+
+    /* Move tail to make room (or shrink) */
+    memmove(pos + replace_len, pos + search_len, tail_len + 1);
+    /* Copy replacement */
+    memcpy(pos, replace, replace_len);
+}
+
+/*
+ * Replace a JSON null value with a number value
+ * e.g. "value":null -> "value":23.456
+ */
+static void json_replace_null_number(char *json, const char *key, double value) {
+    char search[128];
+    char replace[256];
+    char *pos;
+    size_t search_len, replace_len, tail_len;
+
+    snprintf(search, sizeof(search), "\"%s\":null", key);
+    snprintf(replace, sizeof(replace), "\"%s\":%.3f", key, value);
+
+    pos = strstr(json, search);
+    if (pos == NULL) {
+        return;
+    }
+
+    search_len = strlen(search);
+    replace_len = strlen(replace);
+    tail_len = strlen(pos + search_len);
+
+    memmove(pos + replace_len, pos + search_len, tail_len + 1);
+    memcpy(pos, replace, replace_len);
+}
+
+/*
+ * Print a single sensor result as JSON using sc-prototype template
+ */
+static void print_sensor_json(const sensor_result_t *result, int is_first, const char *json_template) {
+    char json[2048];
     char escaped_id[128];
     char escaped_error[256];
 
@@ -443,19 +527,26 @@ static void print_sensor_json(const sensor_result_t *result, int is_first) {
         printf(",");
     }
 
-    json_escape_string(result->sensor_id, escaped_id, sizeof(escaped_id));
+    /* Start with the template */
+    strncpy(json, json_template, sizeof(json) - 1);
+    json[sizeof(json) - 1] = '\0';
 
-    printf("{\"sensor\":\"%s\",\"measures\":\"temperature\",\"unit\":\"Celsius\",\"sensor_id\":\"%s\"",
-           result->sensor_type, escaped_id);
+    /* Populate the fields */
+    json_escape_string(result->sensor_id, escaped_id, sizeof(escaped_id));
+    
+    json_replace_null_string(json, "sensor", result->sensor_type);
+    json_replace_null_string(json, "measures", "temperature");
+    json_replace_null_string(json, "unit", "Celsius");
+    json_replace_null_string(json, "sensor_id", escaped_id);
 
     if (result->has_error) {
         json_escape_string(result->error_msg, escaped_error, sizeof(escaped_error));
-        printf(",\"error\":\"%s\"", escaped_error);
+        json_replace_null_string(json, "error", escaped_error);
     } else {
-        printf(",\"value\":%.3f", result->temperature);
+        json_replace_null_number(json, "value", result->temperature);
     }
 
-    printf("}");
+    printf("%s", json);
 }
 
 /*
@@ -491,6 +582,7 @@ int main(int argc, char *argv[]) {
     sensor_result_t results[MAX_SENSORS];
     thread_args_t thread_args[MAX_SENSORS];
     pthread_t threads[MAX_SENSORS];
+    char json_template[1024];
     int sensor_count;
     int master_count;
     int i;
@@ -544,6 +636,12 @@ int main(int argc, char *argv[]) {
         printf("[]\n");
         fprintf(stderr, "Warning: No w1_therm sensors detected. Please check your wiring and ensure 1-Wire is enabled.\n");
         return EXIT_SUCCESS_CODE;
+    }
+
+    /* Get JSON template from sc-prototype */
+    if (get_sc_prototype(json_template, sizeof(json_template)) != 0) {
+        fprintf(stderr, "Error: Failed to get JSON template from sc-prototype\n");
+        return 1;
     }
 
     /* Initialize results */
@@ -600,7 +698,7 @@ int main(int argc, char *argv[]) {
     printf("[");
     for (i = 0; i < sensor_count; i++) {
         if (results[i].valid) {
-            print_sensor_json(&results[i], is_first);
+            print_sensor_json(&results[i], is_first, json_template);
             is_first = 0;
             output_count++;
         } else if (results[i].sensor_id[0] != '\0') {
