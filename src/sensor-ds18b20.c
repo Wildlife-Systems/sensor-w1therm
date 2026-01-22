@@ -142,7 +142,7 @@ static int trigger_bulk_read(const char *master_path) {
     }
 
     gettimeofday(&tv_start, NULL);
-    written = write(fd, "trigger", 7);
+    written = write(fd, "trigger\n", 8);
     fsync(fd);  /* Force sync to kernel */
     gettimeofday(&tv_end, NULL);
     
@@ -150,7 +150,7 @@ static int trigger_bulk_read(const char *master_path) {
                     (tv_end.tv_usec - tv_start.tv_usec) / 1000;
     fprintf(stderr, "Debug: trigger write took %ldms\n", write_ms);
 
-    if (written != 7) {
+    if (written != 8) {
         fprintf(stderr, "Debug: trigger_bulk_read: write failed: %s (wrote %zd)\n", 
                 strerror(errno), written);
         close(fd);
