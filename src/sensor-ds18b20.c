@@ -135,7 +135,7 @@ static int trigger_bulk_read(const char *master_path) {
 
     snprintf(file_path, sizeof(file_path), "%s/therm_bulk_read", master_path);
 
-    fd = open(file_path, O_WRONLY);
+    fd = open(file_path, O_WRONLY | O_SYNC);
     if (fd < 0) {
         fprintf(stderr, "Debug: trigger_bulk_read: open failed: %s\n", strerror(errno));
         return -1;  /* Bulk read not supported or permission denied */
@@ -143,6 +143,7 @@ static int trigger_bulk_read(const char *master_path) {
 
     gettimeofday(&tv_start, NULL);
     written = write(fd, "trigger", 7);
+    fsync(fd);  /* Force sync to kernel */
     gettimeofday(&tv_end, NULL);
     
     long write_ms = (tv_end.tv_sec - tv_start.tv_sec) * 1000 + 
