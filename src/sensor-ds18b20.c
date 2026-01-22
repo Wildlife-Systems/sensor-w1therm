@@ -131,6 +131,7 @@ static int trigger_bulk_read(const char *master_path) {
     char file_path[MAX_PATH_LEN];
     int fd;
     ssize_t written;
+    struct timeval tv_start, tv_end;
 
     snprintf(file_path, sizeof(file_path), "%s/therm_bulk_read", master_path);
 
@@ -140,7 +141,14 @@ static int trigger_bulk_read(const char *master_path) {
         return -1;  /* Bulk read not supported or permission denied */
     }
 
+    gettimeofday(&tv_start, NULL);
     written = write(fd, "trigger", 7);
+    gettimeofday(&tv_end, NULL);
+    
+    long write_ms = (tv_end.tv_sec - tv_start.tv_sec) * 1000 + 
+                    (tv_end.tv_usec - tv_start.tv_usec) / 1000;
+    fprintf(stderr, "Debug: trigger write took %ldms\n", write_ms);
+
     if (written != 7) {
         fprintf(stderr, "Debug: trigger_bulk_read: write failed: %s (wrote %zd)\n", 
                 strerror(errno), written);
