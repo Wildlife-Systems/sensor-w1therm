@@ -496,7 +496,6 @@ int main(int argc, char *argv[]) {
     int i;
     int output_count = 0;
     int is_first = 1;
-    int bulk_read_triggered = 0;
 
     /* Handle 'identify' command */
     if (argc > 1 && strcmp(argv[1], "identify") == 0) {
@@ -570,9 +569,7 @@ int main(int argc, char *argv[]) {
     if (master_count > 0) {
         /* Trigger bulk conversion on all masters - this blocks until complete */
         for (i = 0; i < master_count; i++) {
-            if (trigger_bulk_read(masters[i]) == 0) {
-                bulk_read_triggered = 1;
-            } else {
+            if (trigger_bulk_read(masters[i]) != 0) {
                 fprintf(stderr, "Warning: Failed to trigger bulk read on %s (may need root)\n", masters[i]);
             }
         }
