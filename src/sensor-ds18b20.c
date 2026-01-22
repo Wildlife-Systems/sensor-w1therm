@@ -190,11 +190,27 @@ static int wait_for_bulk_read(const char *master_path, int timeout_ms) {
     int poll_interval_us = 10000;  /* 10ms poll interval */
     int status;
 
+    /* Small delay to let kernel process the trigger */
+    usleep(1000);  /* 1ms */
+
     while (elapsed < timeout_ms) {
         status = poll_bulk_read(master_path);
-        if (status >= 0) {
-            return 0;  /* Conversion complete or no pending */
+        /* status: -1 = still converting, 0 = no pending, 1 = complete */
+        if (status == 1) {
+            return 0;  /* Conversion complete, values ready */
         }
+        if (status == 0) {
+            /* No conversion pending - either finished or never started */
+            /* Give it a moment and check again */
+            usleep(poll_interval_us);
+            status = poll_bulk_read(master_path);
+            if (status == 1) {
+                return 0;
+            }
+            /* Still 0 - conversion may have already completed and been read */
+            return 0;
+        }
+        /* status == -1: still in progress */
         usleep(poll_interval_us);
         elapsed += poll_interval_us / 1000;
     }
