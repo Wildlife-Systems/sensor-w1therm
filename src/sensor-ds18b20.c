@@ -129,12 +129,12 @@ static int is_w1therm_folder(const struct dirent *entry) {
  * 
  * Note: The write blocks until conversion is complete (~750ms for 12-bit).
  */
-static int trigger_bulk_read(const char *master_path) {
+static int trigger_bulk_read(const char master_path[MAX_PATH_LEN]) {
     char file_path[MAX_PATH_LEN];
     int fd;
     ssize_t written;
 
-    snprintf(file_path, sizeof(file_path), "%s/therm_bulk_read", master_path);
+    snprintf(file_path, sizeof(file_path), "%.480s/therm_bulk_read", master_path);
 
     fd = open(file_path, O_WRONLY | O_SYNC);
     if (fd < 0) {
@@ -586,7 +586,7 @@ int main(int argc, char *argv[]) {
      */
     for (i = 0; i < sensor_count; i++) {
         thread_args[i].result = &results[i];
-        snprintf(thread_args[i].folder_path, sizeof(thread_args[i].folder_path), "%s", folders[i]);
+        snprintf(thread_args[i].folder_path, sizeof(thread_args[i].folder_path), "%.511s", folders[i]);
 
         if (pthread_create(&threads[i], NULL, read_sensor_thread, &thread_args[i]) != 0) {
             /* If thread creation fails, read synchronously */
