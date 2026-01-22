@@ -28,6 +28,7 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <sys/time.h>
 #include <errno.h>
 #include <ctype.h>
 #include <pthread.h>
@@ -352,6 +353,7 @@ static void *read_sensor_thread(void *arg) {
     sensor_result_t *result = args->result;
     long temp_raw = 0;
     char *sensor_id;
+    struct timeval tv_start, tv_end;
 
     /* Extract sensor ID from folder path */
     sensor_id = strrchr(args->folder_path, '/');
@@ -367,9 +369,12 @@ static void *read_sensor_thread(void *arg) {
     strncpy(result->sensor_type, get_sensor_type(sensor_id), sizeof(result->sensor_type) - 1);
     result->sensor_type[sizeof(result->sensor_type) - 1] = '\0';
 
+    gettimeofday(&tv_start, NULL);
+
     /* Try reading from temperature file first (simpler interface) */
     if (read_temperature_file(args->folder_path, &temp_raw) != 0) {
         /* Fall back to w1_slave file */
+        fprintf(stderr, "Debug: temperature file failed for %s, trying w1_slave\n", sensor_id);
         if (read_w1_slave(args->folder_path, &temp_raw) != 0) {
             result->has_error = 1;
             snprintf(result->error_msg, sizeof(result->error_msg), "Failed to read sensor");
@@ -377,6 +382,11 @@ static void *read_sensor_thread(void *arg) {
             return NULL;
         }
     }
+
+    gettimeofday(&tv_end, NULL);
+    long read_ms = (tv_end.tv_sec - tv_start.tv_sec) * 1000 + 
+                   (tv_end.tv_usec - tv_start.tv_usec) / 1000;
+    fprintf(stderr, "Debug: Read %s took %ldms\n", sensor_id, read_ms);
 
     result->valid = 1;
 
@@ -553,12 +563,16 @@ int main(int argc, char *argv[]) {
     if (master_count == 0) {
         fprintf(stderr, "Warning: No w1_bus_master found, falling back to sequential reads\n");
     }
+
+    struct timeval tv_start, tv_end;
+    gettimeofday(&tv_start, NULL);
     
     if (master_count > 0) {
         /* Trigger bulk conversion on all masters */
         for (i = 0; i < master_count; i++) {
             if (trigger_bulk_read(masters[i]) == 0) {
                 bulk_read_triggered = 1;
+                fprintf(stderr, "Debug: Bulk read triggered on %s\n", masters[i]);
             } else {
                 fprintf(stderr, "Warning: Failed to trigger bulk read on %s\n", masters[i]);
             }
@@ -567,7 +581,12 @@ int main(int argc, char *argv[]) {
         if (bulk_read_triggered) {
             /* Wait for all conversions to complete (max 1000ms for 12-bit resolution) */
             for (i = 0; i < master_count; i++) {
-                wait_for_bulk_read(masters[i], 1000);
+                int wait_result = wait_for_bulk_read(masters[i], 1000);
+                gettimeofday(&tv_end, NULL);
+                long elapsed_ms = (tv_end.tv_sec - tv_start.tv_sec) * 1000 + 
+                                  (tv_end.tv_usec - tv_start.tv_usec) / 1000;
+                fprintf(stderr, "Debug: wait_for_bulk_read returned %d after %ldms\n", 
+                        wait_result, elapsed_ms);
             }
         }
     }
