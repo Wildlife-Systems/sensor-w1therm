@@ -1,2 +1,1 @@
 sensor-w1therm usr/bin
-debian/sensor-w1therm.service lib/systemd/system
