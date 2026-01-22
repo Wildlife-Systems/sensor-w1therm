@@ -1,4 +1,4 @@
-sensor-ds18b20 (1.0.0) stable; urgency=medium
+sensor-w1therm (1.0.0) stable; urgency=medium
 
   * Initial C implementation
   * Parallel sensor reading using pthreads

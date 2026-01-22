@@ -1,7 +1,7 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: sensor-ds18b20
+Upstream-Name: sensor-w1therm
 Upstream-Contact: Ed Baker <ed@ebaker.me.uk>
-Source: https://github.com/WildlifeSystems/sensor-ds18b20-c
+Source: https://github.com/WildlifeSystems/sensor-w1therm
 
 Files: *
 Copyright: 2024-2026 Ed Baker <ed@ebaker.me.uk>

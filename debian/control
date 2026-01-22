@@ -1,17 +1,17 @@
-Source: sensor-ds18b20
+Source: sensor-w1therm
 Section: misc
 Priority: optional
 Maintainer: Ed Baker <ed@ebaker.me.uk>
 Build-Depends: debhelper (>= 11), gcc, dh-systemd
 Standards-Version: 4.5.0
 Homepage: https://wildlife.systems
-Vcs-Git: https://github.com/WildlifeSystems/sensor-ds18b20-c.git
+Vcs-Git: https://github.com/WildlifeSystems/sensor-w1therm.git
 
-Package: sensor-ds18b20
+Package: sensor-w1therm
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, sensor-control
-Description: DS18B20 temperature sensor reader for WildlifeSystems
- A utility to read temperature data from DS18B20 1-Wire temperature
+Description: w1_therm temperature sensor reader for WildlifeSystems
+ A utility to read temperature data from w1_therm 1-Wire temperature
  sensors connected via the Linux kernel w1_therm driver interface.
  Outputs readings in JSON format compatible with the WildlifeSystems
  sensor-control framework.

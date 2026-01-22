@@ -7,7 +7,7 @@ override_dh_auto_build:
 	$(MAKE)
 
 override_dh_auto_install:
-	$(MAKE) install DESTDIR=$(CURDIR)/debian/sensor-ds18b20
+	$(MAKE) install DESTDIR=$(CURDIR)/debian/sensor-w1therm
 
 override_dh_auto_clean:
 	$(MAKE) clean
