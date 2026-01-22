@@ -142,6 +142,8 @@ static int trigger_bulk_read(const char *master_path) {
         return -1;
     }
 
+    /* Flush and close to ensure write completes */
+    fflush(fp);
     fclose(fp);
     return 0;
 }
@@ -159,15 +161,18 @@ static int poll_bulk_read(const char *master_path) {
 
     fp = fopen(file_path, "r");
     if (!fp) {
+        fprintf(stderr, "Debug: poll_bulk_read: cannot open file\n");
         return 0;  /* No bulk read support */
     }
 
     if (fscanf(fp, "%d", &status) != 1) {
+        fprintf(stderr, "Debug: poll_bulk_read: fscanf failed\n");
         fclose(fp);
         return 0;
     }
 
     fclose(fp);
+    fprintf(stderr, "Debug: poll_bulk_read status = %d\n", status);
     return status;
 }
 
