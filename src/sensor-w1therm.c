@@ -641,10 +641,10 @@ static int enable_w1_interface(void) {
         return 1;
     }
 
-    fprintf(fp, "\n# 1-Wire interface for temperature sensors (added by sensor-w1therm)\n");
     if (!has_all_section) {
-        fprintf(fp, "[all]\n");
+        fprintf(fp, "\n[all]\n");
     }
+    fprintf(fp, "# 1-Wire interface for temperature sensors (added by sensor-w1therm)\n");
     fprintf(fp, "%s\n", W1_OVERLAY_LINE);
     fclose(fp);
 
