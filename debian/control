@@ -2,7 +2,7 @@ Source: sensor-w1therm
 Section: misc
 Priority: optional
 Maintainer: Ed Baker <ed@ebaker.me.uk>
-Build-Depends: debhelper (>= 11), gcc, dh-systemd
+Build-Depends: debhelper (>= 11), gcc
 Standards-Version: 4.5.0
 Homepage: https://wildlife.systems
 Vcs-Git: https://github.com/WildlifeSystems/sensor-w1therm.git
