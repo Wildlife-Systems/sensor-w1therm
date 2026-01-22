@@ -30,11 +30,11 @@ install: $(TARGET)
 	install -d $(DESTDIR)$(BINDIR)
 	install -m 755 $(TARGET) $(DESTDIR)$(BINDIR)/$(TARGET)
 	install -d $(DESTDIR)$(MANDIR)
-	install -m 644 man/sensor-ds18b20.1 $(DESTDIR)$(MANDIR)/sensor-ds18b20.1
+	install -m 644 man/sensor-w1therm.1 $(DESTDIR)$(MANDIR)/sensor-w1therm.1
 
 uninstall:
 	rm -f $(DESTDIR)$(BINDIR)/$(TARGET)
-	rm -f $(DESTDIR)$(MANDIR)/sensor-ds18b20.1
+	rm -f $(DESTDIR)$(MANDIR)/sensor-w1therm.1
 
 clean:
 	rm -f $(TARGET) $(OBJECTS)
