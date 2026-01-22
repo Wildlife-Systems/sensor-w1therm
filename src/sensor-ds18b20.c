@@ -26,6 +26,7 @@
 #include <string.h>
 #include <dirent.h>
 #include <unistd.h>
+#include <fcntl.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <sys/time.h>
@@ -128,23 +129,27 @@ static int is_w1therm_folder(const struct dirent *entry) {
  */
 static int trigger_bulk_read(const char *master_path) {
     char file_path[MAX_PATH_LEN];
-    FILE *fp;
+    int fd;
+    ssize_t written;
 
     snprintf(file_path, sizeof(file_path), "%s/therm_bulk_read", master_path);
 
-    fp = fopen(file_path, "w");
-    if (!fp) {
+    fd = open(file_path, O_WRONLY);
+    if (fd < 0) {
+        fprintf(stderr, "Debug: trigger_bulk_read: open failed: %s\n", strerror(errno));
         return -1;  /* Bulk read not supported or permission denied */
     }
 
-    if (fprintf(fp, "trigger") < 0) {
-        fclose(fp);
+    written = write(fd, "trigger", 7);
+    if (written != 7) {
+        fprintf(stderr, "Debug: trigger_bulk_read: write failed: %s (wrote %zd)\n", 
+                strerror(errno), written);
+        close(fd);
         return -1;
     }
 
-    /* Flush and close to ensure write completes */
-    fflush(fp);
-    fclose(fp);
+    close(fd);
+    fprintf(stderr, "Debug: trigger_bulk_read: wrote 'trigger' successfully\n");
     return 0;
 }
 
