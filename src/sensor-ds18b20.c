@@ -212,11 +212,11 @@ static int wait_for_bulk_read(const char *master_path, int timeout_ms) {
  * Feature bit 1: Check for conversion errors (85.00 or 127.94)
  * Feature bit 2: Poll for conversion completion (faster reads)
  */
-static int enable_poll_feature(const char *sensor_path) {
+static int enable_poll_feature(const char sensor_path[MAX_PATH_LEN]) {
     char file_path[MAX_PATH_LEN];
     FILE *fp;
 
-    snprintf(file_path, sizeof(file_path), "%s/features", sensor_path);
+    snprintf(file_path, sizeof(file_path), "%.500s/features", sensor_path);
 
     fp = fopen(file_path, "w");
     if (!fp) {
@@ -237,11 +237,11 @@ static int enable_poll_feature(const char *sensor_path) {
  * Auto-measure and set conversion time for a sensor
  * Writing '1' to conv_time tells the driver to measure actual conversion time
  */
-static int auto_set_conv_time(const char *sensor_path) {
+static int auto_set_conv_time(const char sensor_path[MAX_PATH_LEN]) {
     char file_path[MAX_PATH_LEN];
     FILE *fp;
 
-    snprintf(file_path, sizeof(file_path), "%s/conv_time", sensor_path);
+    snprintf(file_path, sizeof(file_path), "%.500s/conv_time", sensor_path);
 
     fp = fopen(file_path, "w");
     if (!fp) {
