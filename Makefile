@@ -1,4 +1,4 @@
-# Makefile for sensor-ds18b20
+# Makefile for sensor-w1therm
 #
 # Part of the WildlifeSystems project.
 # https://wildlife.systems
@@ -13,7 +13,7 @@ MANDIR = $(PREFIX)/share/man/man1
 
 TARGET = sensor-w1therm
 SRCDIR = src
-SOURCES = $(SRCDIR)/sensor-ds18b20.c
+SOURCES = $(SRCDIR)/sensor-w1therm.c
 OBJECTS = $(SOURCES:.c=.o)
 
 .PHONY: all clean install uninstall

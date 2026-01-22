@@ -1,14 +1,15 @@
-.TH SENSOR-DS18B20 1 "October 2025" "sensor-ds18b20 1.0" "WildlifeSystems"
+.TH SENSOR-W1THERM 1 "January 2026" "sensor-w1therm 1.0" "WildlifeSystems"
 .SH NAME
-sensor-ds18b20 \- read DS18B20 1-Wire temperature sensors
+sensor-w1therm \- read w1_therm 1-Wire temperature sensors
 .SH SYNOPSIS
-.B sensor-ds18b20
-[\fBidentify\fR|\fBlist\fR]
+.B sensor-w1therm
+[\fBidentify\fR|\fBlist\fR|\fBsetup\fR]
 .SH DESCRIPTION
-.B sensor-ds18b20
-reads temperature data from DS18B20 1-Wire temperature sensors connected to the system.
-The command scans for all DS18B20 sensors (device ID starting with 28-) on the 1-Wire bus
-and outputs their readings in JSON format compatible with the WildlifeSystems sensor-control framework.
+.B sensor-w1therm
+reads temperature data from w1_therm 1-Wire temperature sensors connected to the system.
+The command scans for all supported sensors (DS18S20, DS1822, DS18B20, DS1825, DS28EA00)
+on the 1-Wire bus and outputs their readings in JSON format compatible with the
+WildlifeSystems sensor-control framework.
 .PP
 The 1-Wire interface must be enabled in the Raspberry Pi configuration (typically via
 dtoverlay=w1-gpio in /boot/config.txt or /boot/firmware/config.txt) before sensors can be detected.
@@ -18,14 +19,18 @@ dtoverlay=w1-gpio in /boot/config.txt or /boot/firmware/config.txt) before senso
 Returns exit code 60 to identify this sensor type to the WildlifeSystems framework.
 .TP
 .B list
-Lists the measurement types supported by this sensor. For DS18B20, this outputs "temperature".
+Lists the measurement types supported by this sensor. Outputs "temperature".
+.TP
+.B setup
+Configures all connected sensors for fast reading by setting conversion time
+and resolution. Should be run once after boot (handled automatically by systemd service).
 .SH OUTPUT FORMAT
 When run without arguments, the command outputs a JSON array containing sensor readings.
 Each sensor reading includes:
 .PP
 .RS
 .IP \(bu 2
-sensor: The sensor type ("ds18b20")
+sensor: The sensor type (e.g., "ds18b20", "ds1822")
 .IP \(bu 2
 measures: The measurement type ("temperature")
 .IP \(bu 2
@@ -39,21 +44,27 @@ error: (optional) Error message if reading failed
 .RE
 .SH EXAMPLES
 .TP
-Read all connected DS18B20 sensors:
-.B sensor-ds18b20
+Read all connected w1_therm sensors:
+.B sensor-w1therm
 .TP
 List supported measurements:
-.B sensor-ds18b20 list
+.B sensor-w1therm list
+.TP
+Configure sensors for fast reading:
+.B sensor-w1therm setup
 .TP
 Identify sensor type (for sensor-control integration):
-.B sensor-ds18b20 identify
+.B sensor-w1therm identify
 .SH FILES
 .TP
-.I /sys/bus/w1/devices/28-*/w1_slave
+.I /sys/bus/w1/devices/*/w1_slave
 1-Wire device interface files where temperature readings are obtained.
 .TP
-.I /sys/bus/w1/devices/28-*/temperature
+.I /sys/bus/w1/devices/*/temperature
 Alternative sysfs entry providing direct temperature reading in millidegrees.
+.TP
+.I /sys/bus/w1/devices/w1_bus_master1/therm_bulk_read
+Bulk read trigger for optimized multi-sensor reading.
 .TP
 .I /boot/config.txt
 or
