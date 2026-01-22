@@ -21,7 +21,6 @@
  *   https://docs.kernel.org/w1/slaves/w1_therm.html
  */
 
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -35,7 +34,7 @@
 
 #define W1_DEVICES_PATH "/sys/bus/w1/devices"
 #define MAX_SENSORS 64
-#define MAX_PATH_LEN 256
+#define MAX_PATH_LEN 512
 #define MAX_LINE_LEN 256
 
 /* Error values in millidegrees */
@@ -96,6 +95,14 @@ static const char *get_sensor_type(const char *sensor_id) {
 }
 
 /*
+ * Check if a directory entry is a w1_bus_master folder
+ */
+static int is_w1_master_folder(const struct dirent *entry) {
+    return (entry->d_type == DT_LNK || entry->d_type == DT_DIR) &&
+           strncmp(entry->d_name, "w1_bus_master", 13) == 0;
+}
+
+/*
  * Check if a directory entry is a w1_therm sensor folder
  */
 static int is_w1therm_folder(const struct dirent *entry) {
@@ -111,6 +118,154 @@ static int is_w1therm_folder(const struct dirent *entry) {
         }
     }
     return 0;
+}
+
+/*
+ * Trigger bulk read on a w1_bus_master
+ * This sends the convert command to ALL sensors on the bus simultaneously,
+ * which is much faster than reading each sensor individually.
+ */
+static int trigger_bulk_read(const char *master_path) {
+    char file_path[MAX_PATH_LEN];
+    FILE *fp;
+
+    snprintf(file_path, sizeof(file_path), "%s/therm_bulk_read", master_path);
+
+    fp = fopen(file_path, "w");
+    if (!fp) {
+        return -1;  /* Bulk read not supported or permission denied */
+    }
+
+    if (fprintf(fp, "trigger") < 0) {
+        fclose(fp);
+        return -1;
+    }
+
+    fclose(fp);
+    return 0;
+}
+
+/*
+ * Poll for bulk read completion
+ * Returns: 0 = no bulk read pending, 1 = complete, -1 = still in progress
+ */
+static int poll_bulk_read(const char *master_path) {
+    char file_path[MAX_PATH_LEN];
+    FILE *fp;
+    int status;
+
+    snprintf(file_path, sizeof(file_path), "%s/therm_bulk_read", master_path);
+
+    fp = fopen(file_path, "r");
+    if (!fp) {
+        return 0;  /* No bulk read support */
+    }
+
+    if (fscanf(fp, "%d", &status) != 1) {
+        fclose(fp);
+        return 0;
+    }
+
+    fclose(fp);
+    return status;
+}
+
+/*
+ * Wait for bulk read to complete with timeout
+ * Returns 0 on success, -1 on timeout
+ */
+static int wait_for_bulk_read(const char *master_path, int timeout_ms) {
+    int elapsed = 0;
+    int poll_interval_us = 10000;  /* 10ms poll interval */
+    int status;
+
+    while (elapsed < timeout_ms) {
+        status = poll_bulk_read(master_path);
+        if (status >= 0) {
+            return 0;  /* Conversion complete or no pending */
+        }
+        usleep(poll_interval_us);
+        elapsed += poll_interval_us / 1000;
+    }
+
+    return -1;  /* Timeout */
+}
+
+/*
+ * Enable poll-for-conversion feature on a sensor
+ * This makes the driver poll the bus for conversion completion
+ * instead of waiting the full default conversion time.
+ * Feature bit 1: Check for conversion errors (85.00 or 127.94)
+ * Feature bit 2: Poll for conversion completion (faster reads)
+ */
+static int enable_poll_feature(const char *sensor_path) {
+    char file_path[MAX_PATH_LEN];
+    FILE *fp;
+
+    snprintf(file_path, sizeof(file_path), "%s/features", sensor_path);
+
+    fp = fopen(file_path, "w");
+    if (!fp) {
+        return -1;  /* Feature not supported or permission denied */
+    }
+
+    /* Enable both features: error checking (1) + poll for completion (2) = 3 */
+    if (fprintf(fp, "3") < 0) {
+        fclose(fp);
+        return -1;
+    }
+
+    fclose(fp);
+    return 0;
+}
+
+/*
+ * Auto-measure and set conversion time for a sensor
+ * Writing '1' to conv_time tells the driver to measure actual conversion time
+ */
+static int auto_set_conv_time(const char *sensor_path) {
+    char file_path[MAX_PATH_LEN];
+    FILE *fp;
+
+    snprintf(file_path, sizeof(file_path), "%s/conv_time", sensor_path);
+
+    fp = fopen(file_path, "w");
+    if (!fp) {
+        return -1;  /* Not supported or permission denied */
+    }
+
+    /* Write '1' to trigger auto-measurement of conversion time */
+    if (fprintf(fp, "1") < 0) {
+        fclose(fp);
+        return -1;
+    }
+
+    fclose(fp);
+    return 0;
+}
+
+/*
+ * Find all w1_bus_master paths
+ */
+static int find_masters(char masters[][MAX_PATH_LEN], int max_count) {
+    DIR *dir;
+    struct dirent *entry;
+    int count = 0;
+
+    dir = opendir(W1_DEVICES_PATH);
+    if (!dir) {
+        return 0;
+    }
+
+    while ((entry = readdir(dir)) != NULL && count < max_count) {
+        if (is_w1_master_folder(entry)) {
+            snprintf(masters[count], MAX_PATH_LEN, "%s/%s", W1_DEVICES_PATH, entry->d_name);
+            count++;
+        }
+    }
+
+    closedir(dir);
+    return count;
 }
 
 /*
@@ -314,29 +469,20 @@ static int find_sensors(char folders[][MAX_PATH_LEN], int max_count) {
 }
 
 /*
- * Get the number of available CPU cores
- */
-static int get_num_cores(void) {
-    long nprocs = sysconf(_SC_NPROCESSORS_ONLN);
-    if (nprocs < 1) {
-        return 4;  /* Default fallback */
-    }
-    return (int)nprocs;
-}
-
-/*
  * Main entry point
  */
 int main(int argc, char *argv[]) {
     char folders[MAX_SENSORS][MAX_PATH_LEN];
+    char masters[8][MAX_PATH_LEN];  /* w1_bus_master paths */
     sensor_result_t results[MAX_SENSORS];
     thread_args_t thread_args[MAX_SENSORS];
     pthread_t threads[MAX_SENSORS];
     int sensor_count;
+    int master_count;
     int i;
     int output_count = 0;
     int is_first = 1;
-    int max_threads;
+    int bulk_read_triggered = 0;
 
     /* Handle 'identify' command */
     if (argc > 1 && strcmp(argv[1], "identify") == 0) {
@@ -349,29 +495,86 @@ int main(int argc, char *argv[]) {
         return EXIT_SUCCESS_CODE;
     }
 
-    /* Find all DS18B20 sensors */
+    /* Find all w1_therm sensors */
     sensor_count = find_sensors(folders, MAX_SENSORS);
+
+    /*
+     * Handle 'setup' command - configure sensors for fastest possible readings
+     * This enables poll-for-completion and auto-measures conversion time.
+     * Run once after boot or when sensors are added.
+     */
+    if (argc > 1 && strcmp(argv[1], "setup") == 0) {
+        if (sensor_count == 0) {
+            fprintf(stderr, "No sensors found to configure.\n");
+            return 1;
+        }
+        printf("Configuring %d sensor(s) for optimized reading...\n", sensor_count);
+        for (i = 0; i < sensor_count; i++) {
+            char *sensor_id = strrchr(folders[i], '/');
+            sensor_id = sensor_id ? sensor_id + 1 : folders[i];
+            
+            if (enable_poll_feature(folders[i]) == 0) {
+                printf("  %s: enabled poll-for-completion\n", sensor_id);
+            } else {
+                printf("  %s: poll feature not available (may need root)\n", sensor_id);
+            }
+            
+            if (auto_set_conv_time(folders[i]) == 0) {
+                printf("  %s: auto-measuring conversion time...\n", sensor_id);
+            }
+        }
+        printf("Setup complete. Sensors are now optimized for fast reading.\n");
+        return EXIT_SUCCESS_CODE;
+    }
 
     if (sensor_count == 0) {
         printf("[]\n");
-        fprintf(stderr, "Warning: No DS18B20 sensors detected. Please check your wiring and ensure 1-Wire is enabled.\n");
+        fprintf(stderr, "Warning: No w1_therm sensors detected. Please check your wiring and ensure 1-Wire is enabled.\n");
         return EXIT_SUCCESS_CODE;
     }
 
     /* Initialize results */
     memset(results, 0, sizeof(results));
 
-    /* Determine thread count */
-    max_threads = get_num_cores();
-    if (max_threads > sensor_count) {
-        max_threads = sensor_count;
+    /*
+     * OPTIMIZATION: Use bulk read for fastest possible reading
+     * 
+     * Traditional approach: Each sensor read triggers a conversion (~750ms for 12-bit)
+     * Reading N sensors sequentially = N * 750ms
+     * 
+     * Bulk read approach: Trigger conversion on ALL sensors simultaneously,
+     * wait once for completion, then read cached values.
+     * Reading N sensors = 750ms + N * (fast read time)
+     * 
+     * This is dramatically faster for multiple sensors!
+     */
+    master_count = find_masters(masters, 8);
+    
+    if (master_count > 0) {
+        /* Trigger bulk conversion on all masters */
+        for (i = 0; i < master_count; i++) {
+            if (trigger_bulk_read(masters[i]) == 0) {
+                bulk_read_triggered = 1;
+            }
+        }
+
+        if (bulk_read_triggered) {
+            /* Wait for all conversions to complete (max 1000ms for 12-bit resolution) */
+            for (i = 0; i < master_count; i++) {
+                wait_for_bulk_read(masters[i], 1000);
+            }
+        }
     }
 
-    /* Read sensors in parallel using threads */
+    /*
+     * After bulk read, reading the 'temperature' file returns the cached
+     * converted value without triggering a new conversion - this is very fast.
+     * 
+     * We read in parallel for even more speed when there are many sensors.
+     */
     for (i = 0; i < sensor_count; i++) {
         thread_args[i].result = &results[i];
-        strncpy(thread_args[i].folder_path, folders[i], MAX_PATH_LEN - 1);
-        thread_args[i].folder_path[MAX_PATH_LEN - 1] = '\0';
+        snprintf(thread_args[i].folder_path, sizeof(thread_args[i].folder_path), "%s", folders[i]);
 
         if (pthread_create(&threads[i], NULL, read_sensor_thread, &thread_args[i]) != 0) {
             /* If thread creation fails, read synchronously */
@@ -398,7 +601,7 @@ int main(int argc, char *argv[]) {
     printf("]\n");
 
     if (output_count == 0) {
-        fprintf(stderr, "Warning: No DS18B20 sensors detected. Please check your wiring and ensure 1-Wire is enabled.\n");
+        fprintf(stderr, "Warning: No w1_therm sensors detected. Please check your wiring and ensure 1-Wire is enabled.\n");
     }
 
     return EXIT_SUCCESS_CODE;
