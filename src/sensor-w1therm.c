@@ -39,6 +39,13 @@
 #define MAX_PATH_LEN 512
 #define MAX_LINE_LEN 256
 
+/* Boot config paths (Raspberry Pi) */
+#define BOOT_CONFIG_PATH "/boot/firmware/config.txt"
+#define BOOT_CONFIG_PATH_LEGACY "/boot/config.txt"
+
+/* w1-gpio overlay configuration */
+#define W1_OVERLAY_LINE "dtoverlay=w1-gpio;gpiopin=17;pullup=1"
+
 /* Error values in millidegrees */
 #define STARTUP_VALUE_RAW 85000
 #define INSUFFICIENT_POWER_RAW 127937  /* 127.937°C in millidegrees */
@@ -551,6 +558,105 @@ static void print_sensor_json(const sensor_result_t *result, int is_first, const
 }
 
 /*
+ * Check if w1-gpio overlay is already enabled in config.txt
+ * Returns: 1 if found, 0 if not found, -1 on error
+ */
+static int check_w1_overlay_enabled(const char *config_path) {
+    FILE *fp;
+    char line[MAX_LINE_LEN];
+
+    fp = fopen(config_path, "r");
+    if (!fp) {
+        return -1;
+    }
+
+    while (fgets(line, sizeof(line), fp)) {
+        /* Skip comments and whitespace */
+        char *p = line;
+        while (*p && isspace(*p)) p++;
+        if (*p == '#' || *p == '\0' || *p == '\n') continue;
+
+        /* Check for w1-gpio overlay */
+        if (strstr(p, "dtoverlay=w1-gpio") != NULL) {
+            fclose(fp);
+            return 1;
+        }
+    }
+
+    fclose(fp);
+    return 0;
+}
+
+/*
+ * Enable 1-Wire interface by adding overlay to config.txt
+ * Returns: 0 on success, 1 on error
+ */
+static int enable_w1_interface(void) {
+    const char *config_path = NULL;
+    FILE *fp;
+    int has_all_section = 0;
+    char line[MAX_LINE_LEN];
+
+    /* Check which config file exists */
+    if (access(BOOT_CONFIG_PATH, F_OK) == 0) {
+        config_path = BOOT_CONFIG_PATH;
+    } else if (access(BOOT_CONFIG_PATH_LEGACY, F_OK) == 0) {
+        config_path = BOOT_CONFIG_PATH_LEGACY;
+    } else {
+        fprintf(stderr, "Error: Could not find config.txt at %s or %s\n",
+                BOOT_CONFIG_PATH, BOOT_CONFIG_PATH_LEGACY);
+        return 1;
+    }
+
+    /* Check if already enabled */
+    int status = check_w1_overlay_enabled(config_path);
+    if (status == 1) {
+        printf("1-Wire interface is already enabled in %s\n", config_path);
+        printf("If sensors are not detected, please reboot the system.\n");
+        return 0;
+    }
+    if (status == -1) {
+        fprintf(stderr, "Error: Could not read %s (permission denied?)\n", config_path);
+        return 1;
+    }
+
+    /* Check for [all] section */
+    fp = fopen(config_path, "r");
+    if (fp) {
+        while (fgets(line, sizeof(line), fp)) {
+            char *p = line;
+            while (*p && isspace(*p)) p++;
+            if (strncmp(p, "[all]", 5) == 0) {
+                has_all_section = 1;
+                break;
+            }
+        }
+        fclose(fp);
+    }
+
+    /* Append the overlay configuration */
+    fp = fopen(config_path, "a");
+    if (!fp) {
+        fprintf(stderr, "Error: Could not write to %s (need root?)\n", config_path);
+        return 1;
+    }
+
+    fprintf(fp, "\n# 1-Wire interface for temperature sensors (added by sensor-w1therm)\n");
+    if (!has_all_section) {
+        fprintf(fp, "[all]\n");
+    }
+    fprintf(fp, "%s\n", W1_OVERLAY_LINE);
+    fclose(fp);
+
+    printf("1-Wire interface enabled in %s\n", config_path);
+    printf("\n*** REBOOT REQUIRED ***\n");
+    printf("Please reboot the system for changes to take effect:\n");
+    printf("  sudo reboot\n\n");
+
+    return 0;
+}
+
+/*
  * Find all w1_therm sensor folders
  */
 static int find_sensors(char folders[][MAX_PATH_LEN], int max_count) {
@@ -599,6 +705,11 @@ int main(int argc, char *argv[]) {
     if (argc > 1 && strcmp(argv[1], "list") == 0) {
         printf("temperature\n");
         return EXIT_SUCCESS_CODE;
+    }
+
+    /* Handle 'enable' command - add w1-gpio overlay to config.txt */
+    if (argc > 1 && strcmp(argv[1], "enable") == 0) {
+        return enable_w1_interface();
     }
 
     /* Find all w1_therm sensors */

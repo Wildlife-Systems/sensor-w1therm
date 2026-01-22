@@ -3,7 +3,7 @@
 sensor-w1therm \- read w1_therm 1-Wire temperature sensors
 .SH SYNOPSIS
 .B sensor-w1therm
-[\fBidentify\fR|\fBlist\fR|\fBsetup\fR]
+[\fBidentify\fR|\fBlist\fR|\fBsetup\fR|\fBenable\fR]
 .SH DESCRIPTION
 .B sensor-w1therm
 reads temperature data from w1_therm 1-Wire temperature sensors connected to the system.
@@ -11,8 +11,8 @@ The command scans for all supported sensors (DS18S20, DS1822, DS18B20, DS1825, D
 on the 1-Wire bus and outputs their readings in JSON format compatible with the
 WildlifeSystems sensor-control framework.
 .PP
-The 1-Wire interface must be enabled in the Raspberry Pi configuration (typically via
-dtoverlay=w1-gpio in /boot/config.txt or /boot/firmware/config.txt) before sensors can be detected.
+The 1-Wire interface must be enabled in the Raspberry Pi configuration before sensors
+can be detected. Use the 'enable' command to configure this automatically.
 .SH OPTIONS
 .TP
 .B identify
@@ -24,6 +24,11 @@ Lists the measurement types supported by this sensor. Outputs "temperature".
 .B setup
 Configures all connected sensors for fast reading by setting conversion time
 and resolution. Should be run once after boot (handled automatically by systemd service).
+.TP
+.B enable
+Enables the 1-Wire interface by adding the w1-gpio device tree overlay to
+/boot/firmware/config.txt (or /boot/config.txt on older systems). Requires root
+privileges. A reboot is required after running this command.
 .SH OUTPUT FORMAT
 When run without arguments, the command outputs a JSON array containing sensor readings.
 Each sensor reading includes:
@@ -43,6 +48,9 @@ sensor_id: The unique 1-Wire device ID
 error: (optional) Error message if reading failed
 .RE
 .SH EXAMPLES
+.TP
+Enable 1-Wire interface (first-time setup, requires reboot):
+.B sudo sensor-w1therm enable
 .TP
 Read all connected w1_therm sensors:
 .B sensor-w1therm
