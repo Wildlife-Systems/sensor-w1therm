@@ -1,12 +1,19 @@
-# sensor-ds18b20-c
+# sensor-w1therm
 
-A C implementation of the DS18B20 temperature sensor reader for WildlifeSystems.
+A C implementation of the w1_therm temperature sensor reader for WildlifeSystems.
 
 ## Description
 
-This program reads temperature data from DS18B20 1-Wire temperature sensors connected to
+This program reads temperature data from 1-Wire temperature sensors connected to
 the system via the Linux kernel `w1_therm` driver interface. It outputs readings in JSON
 format compatible with the WildlifeSystems sensor-control framework.
+
+Supported sensors:
+- DS18S20 (family code 0x10)
+- DS1822 (family code 0x22)
+- DS18B20 (family code 0x28)
+- DS1825 (family code 0x3B)
+- DS28EA00 (family code 0x42)
 
 ## Building
 
@@ -20,8 +27,8 @@ make
 sudo make install
 ```
 
-This installs the binary to `/usr/bin/sensor-ds18b20` and the man page to
-`/usr/share/man/man1/sensor-ds18b20.1`.
+This installs the binary to `/usr/bin/sensor-w1therm` and the man page to
+`/usr/share/man/man1/sensor-w1therm.1`.
 
 ## Uninstalling
 
@@ -31,10 +38,18 @@ sudo make uninstall
 
 ## Usage
 
-### Read all connected DS18B20 sensors
+### Enable 1-Wire interface (first-time setup)
 
 ```bash
-sensor-ds18b20
+sudo sensor-w1therm enable
+```
+
+This adds the w1-gpio overlay to `/boot/firmware/config.txt`. A reboot is required.
+
+### Read all connected sensors
+
+```bash
+sensor-w1therm
 ```
 
 Output example:
@@ -42,43 +57,48 @@ Output example:
 [{"sensor":"ds18b20","measures":"temperature","unit":"Celsius","sensor_id":"28-0123456789ab","value":23.500}]
 ```
 
+### Configure sensors for fast reading
+
+```bash
+sensor-w1therm setup
+```
+
+This is run automatically on boot by the systemd service.
+
 ### List supported measurements
 
 ```bash
-sensor-ds18b20 list
+sensor-w1therm list
 ```
 
 ### Identify sensor type (for sensor-control integration)
 
 ```bash
-sensor-ds18b20 identify
+sensor-w1therm identify
 ```
 
 Returns exit code 60.
 
 ## Hardware Configuration
 
-1. Enable 1-Wire interface on Raspberry Pi by adding to `/boot/config.txt` or `/boot/firmware/config.txt`:
-   ```
-   dtoverlay=w1-gpio
+1. Enable 1-Wire interface:
+   ```bash
+   sudo sensor-w1therm enable
    ```
 
 2. Reboot the Raspberry Pi
 
-3. Load the 1-Wire kernel modules (usually loaded automatically):
-   ```bash
-   sudo modprobe w1-gpio
-   sudo modprobe w1-therm
-   ```
+3. The 1-Wire kernel modules are loaded automatically.
 
-4. Connected DS18B20 sensors will appear in `/sys/bus/w1/devices/28-*/`
+4. Connected sensors will appear in `/sys/bus/w1/devices/` with their family code prefix.
 
 ## Sysfs Interface
 
 The program uses the Linux kernel `w1_therm` driver sysfs interface:
 
-- `/sys/bus/w1/devices/28-*/w1_slave` - Traditional interface with CRC check
-- `/sys/bus/w1/devices/28-*/temperature` - Direct temperature reading in millidegrees
+- `/sys/bus/w1/devices/*/w1_slave` - Traditional interface with CRC check
+- `/sys/bus/w1/devices/*/temperature` - Direct temperature reading in millidegrees
+- `/sys/bus/w1/devices/w1_bus_master1/therm_bulk_read` - Bulk conversion trigger
 
 For more information, see the [kernel documentation](https://docs.kernel.org/w1/slaves/w1_therm.html).
 
@@ -92,7 +112,7 @@ The program detects and reports the following error conditions:
 
 ## Building the Debian Package
 
-From within the sensor-ds18b20-c directory:
+From within the sensor-w1therm directory:
 
 ```bash
 debuild -us -uc -b
