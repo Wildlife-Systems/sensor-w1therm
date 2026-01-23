@@ -44,7 +44,7 @@
 #define BOOT_CONFIG_PATH_LEGACY "/boot/config.txt"
 
 /* w1-gpio overlay configuration */
-#define W1_OVERLAY_LINE "dtoverlay=w1-gpio;gpiopin=17;pullup=1"
+#define W1_OVERLAY_LINE "dtoverlay=w1-gpio,gpiopin=17,pullup=1"
 
 /* Error values in millidegrees */
 #define STARTUP_VALUE_RAW 85000
