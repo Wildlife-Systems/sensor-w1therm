@@ -28,9 +28,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
-#include <sys/wait.h>
-#include <sys/time.h>
-#include <errno.h>
 #include <ctype.h>
 #include <pthread.h>
 #include <ws_utils.h>
@@ -49,7 +46,6 @@
 
 /* Error values in millidegrees */
 #define STARTUP_VALUE_RAW 85000
-#define INSUFFICIENT_POWER_RAW 127937  /* 127.937°C in millidegrees */
 
 /* Sensor reading result */
 typedef struct {
@@ -155,35 +151,6 @@ static int trigger_bulk_read(const char master_path[MAX_PATH_LEN]) {
     }
 
     return 0;
-}
-
-/*
- * Poll for bulk read completion
- * Returns: 0 = no bulk read pending, 1 = complete, -1 = still in progress
- * 
- * Note: Since trigger_bulk_read() blocks until conversion is complete,
- * this function is mainly useful for checking status when trigger
- * was initiated externally or for non-blocking scenarios.
- */
-static int poll_bulk_read(const char *master_path) {
-    char file_path[MAX_PATH_LEN];
-    FILE *fp;
-    int status;
-
-    snprintf(file_path, sizeof(file_path), "%s/therm_bulk_read", master_path);
-
-    fp = fopen(file_path, "r");
-    if (!fp) {
-        return 0;  /* No bulk read support */
-    }
-
-    if (fscanf(fp, "%d", &status) != 1) {
-        fclose(fp);
-        return 0;
-    }
-
-    fclose(fp);
-    return status;
 }
 
 /*
@@ -404,8 +371,8 @@ static void *read_sensor_thread(void *arg) {
  */
 static void print_sensor_json(const sensor_result_t *result, int is_first, const char *json_template) {
     char json[2048];
-    char *escaped_id;
-    char *escaped_error;
+    char escaped_id[128];
+    char escaped_error[256];
 
     if (!is_first) {
         printf(",");
@@ -416,22 +383,20 @@ static void print_sensor_json(const sensor_result_t *result, int is_first, const
     json[sizeof(json) - 1] = '\0';
 
     /* Populate the fields */
-    escaped_id = ws_json_escape_string(result->sensor_id);
+    ws_json_escape_string(result->sensor_id, escaped_id, sizeof(escaped_id));
     
-    ws_json_replace_null_string(json, sizeof(json), "sensor", result->sensor_type);
-    ws_json_replace_null_string(json, sizeof(json), "measures", "temperature");
-    ws_json_replace_null_string(json, sizeof(json), "unit", "Celsius");
-    ws_json_replace_null_string(json, sizeof(json), "sensor_id", escaped_id);
-    free(escaped_id);
+    ws_json_replace_null_string(json, "sensor", result->sensor_type);
+    ws_json_replace_null_string(json, "measures", "temperature");
+    ws_json_replace_null_string(json, "unit", "Celsius");
+    ws_json_replace_null_string(json, "sensor_id", escaped_id);
 
     if (result->has_error) {
-        escaped_error = ws_json_escape_string(result->error_msg);
-        ws_json_replace_null_string(json, sizeof(json), "error", escaped_error);
-        free(escaped_error);
+        ws_json_escape_string(result->error_msg, escaped_error, sizeof(escaped_error));
+        ws_json_replace_null_string(json, "error", escaped_error);
     }
     
     /* Always output value if we have a temperature reading */
-    ws_json_replace_null_number(json, sizeof(json), "value", result->temperature);
+    ws_json_replace_null_number(json, "value", result->temperature);
 
     printf("%s", json);
 }
