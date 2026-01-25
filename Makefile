@@ -5,7 +5,7 @@
 
 CC = gcc
 CFLAGS = -Wall -Wextra -O2 -D_GNU_SOURCE -I/usr/include/ws
-LDFLAGS = -pthread -lws_utils
+LDFLAGS = -pthread -lwildlifesystems
 
 PREFIX ?= /usr
 BINDIR = $(PREFIX)/bin
