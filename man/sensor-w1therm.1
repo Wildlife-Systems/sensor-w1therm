@@ -3,7 +3,7 @@
 sensor-w1therm \- read w1_therm 1-Wire temperature sensors
 .SH SYNOPSIS
 .B sensor-w1therm
-[\fBidentify\fR|\fBlist\fR|\fBsetup\fR|\fBenable\fR]
+[\fBidentify\fR|\fBlist\fR|\fBsetup\fR|\fBenable\fR|\fBinternal\fR|\fBexternal\fR]
 .SH DESCRIPTION
 .B sensor-w1therm
 reads temperature data from w1_therm 1-Wire temperature sensors connected to the system.
@@ -29,6 +29,12 @@ and resolution. Should be run once after boot (handled automatically by systemd 
 Enables the 1-Wire interface by adding the w1-gpio device tree overlay to
 /boot/firmware/config.txt (or /boot/config.txt on older systems). Requires root
 privileges. A reboot is required after running this command.
+.TP
+.B internal
+Output only readings from sensors marked as internal in the configuration file.
+.TP
+.B external
+Output only readings from sensors marked as external (not internal) in the configuration file.
 .SH OUTPUT FORMAT
 When run without arguments, the command outputs a JSON array containing sensor readings.
 Each sensor reading includes:
@@ -43,7 +49,11 @@ unit: The unit of measurement ("Celsius")
 .IP \(bu 2
 value: The temperature reading in degrees Celsius
 .IP \(bu 2
-sensor_id: The unique 1-Wire device ID
+sensor_id: The unique 1-Wire device ID (or overridden value from config)
+.IP \\(bu 2
+sensor_name: (optional) Human-readable name from configuration file
+.IP \\(bu 2
+internal: (optional) Boolean indicating if sensor is internal, from configuration file
 .IP \(bu 2
 error: (optional) Error message if reading failed
 .RE
@@ -78,6 +88,31 @@ Bulk read trigger for optimized multi-sensor reading.
 or
 .I /boot/firmware/config.txt
 Raspberry Pi configuration file where 1-Wire interface is enabled.
+.TP
+.I /etc/ws/sensors/w1therm.json
+Configuration file for sensor settings. This JSON file allows you to override
+sensor properties. Each sensor is identified by its hardware ID (hw_id) and can
+have the following properties overridden:
+.RS
+.IP \\(bu 2
+hw_id: The 1-Wire hardware ID to match (e.g., "28-00000a1b2c3d")
+.IP \\(bu 2
+sensor_id: Override the sensor_id in output
+.IP \\(bu 2
+sensor_name: Human-readable name for the sensor
+.IP \\(bu 2
+internal: Boolean (true/false) indicating if the sensor is internal
+.RE
+.PP
+Example configuration:
+.RS
+.nf
+[
+  {"hw_id": "28-00000a1b2c3d", "sensor_name": "CPU Temperature", "internal": true},
+  {"hw_id": "28-00000e4f5g6h", "sensor_id": "outdoor_temp", "sensor_name": "Garden", "internal": false}
+]
+.fi
+.RE
 .SH EXIT STATUS
 .TP
 .B 0

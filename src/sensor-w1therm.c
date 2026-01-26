@@ -37,6 +37,9 @@
 #define MAX_PATH_LEN 512
 #define MAX_LINE_LEN 256
 
+/* Config file path */
+#define CONFIG_PATH "/etc/ws/sensors/w1therm.json"
+
 /* Boot config paths (Raspberry Pi) */
 #define BOOT_CONFIG_PATH "/boot/firmware/config.txt"
 #define BOOT_CONFIG_PATH_LEGACY "/boot/config.txt"
@@ -62,6 +65,14 @@ typedef struct {
     char folder_path[MAX_PATH_LEN];
     sensor_result_t *result;
 } thread_args_t;
+
+/* Sensor configuration from config file */
+typedef struct {
+    char *hw_id;        /* Hardware ID to match (e.g., "28-00000a1b2c3d") */
+    char *sensor_id;    /* Override sensor_id in output */
+    char *sensor_name;  /* Human-readable name */
+    int internal;       /* 1 if internal, 0 if external */
+} sensor_config_t;
 
 /* Supported w1_therm family codes */
 static const char *W1_THERM_FAMILY_CODES[] = {
@@ -94,6 +105,150 @@ static const char *get_sensor_type(const char *sensor_id) {
         }
     }
     return "unknown";
+}
+
+/*
+ * Count sensor objects in JSON buffer
+ */
+static int count_sensors_in_json(const char *buffer) {
+    int count = 0;
+    const char *ptr = buffer;
+    while ((ptr = strchr(ptr, '{')) != NULL) {
+        count++;
+        ptr++;
+    }
+    return count;
+}
+
+/*
+ * Parse a simple JSON config file - returns dynamically allocated array
+ */
+static sensor_config_t *load_config(const char *path, int *count) {
+    FILE *fp;
+    char *buffer = NULL;
+    char *ptr;
+    int sensor_idx = 0;
+    sensor_config_t *configs = NULL;
+    int sensor_count;
+    long file_size;
+    *count = 0;
+    fp = fopen(path, "r");
+    if (!fp) return NULL;
+    fseek(fp, 0, SEEK_END);
+    file_size = ftell(fp);
+    fseek(fp, 0, SEEK_SET);
+    if (file_size <= 0) { fclose(fp); return NULL; }
+    buffer = malloc(file_size + 1);
+    if (!buffer) { fclose(fp); return NULL; }
+    size_t bytes_read = fread(buffer, 1, file_size, fp);
+    buffer[bytes_read] = '\0';
+    fclose(fp);
+    sensor_count = count_sensors_in_json(buffer);
+    if (sensor_count == 0) { free(buffer); return NULL; }
+    configs = malloc(sensor_count * sizeof(sensor_config_t));
+    if (!configs) { free(buffer); return NULL; }
+    ptr = buffer;
+    while ((ptr = strchr(ptr, '{')) != NULL && sensor_idx < sensor_count) {
+        char *end = strchr(ptr, '}');
+        if (!end) break;
+        configs[sensor_idx].internal = 0;
+        configs[sensor_idx].hw_id = NULL;
+        configs[sensor_idx].sensor_id = NULL;
+        configs[sensor_idx].sensor_name = NULL;
+        
+        /* Parse "internal" field */
+        char *internal_ptr = strstr(ptr, "\"internal\"");
+        if (internal_ptr && internal_ptr < end) {
+            internal_ptr = strchr(internal_ptr, ':');
+            if (internal_ptr) {
+                while (*internal_ptr == ':' || *internal_ptr == ' ') internal_ptr++;
+                configs[sensor_idx].internal = (strncmp(internal_ptr, "true", 4) == 0);
+            }
+        }
+        
+        /* Parse "hw_id" field */
+        char *hw_ptr = strstr(ptr, "\"hw_id\"");
+        if (hw_ptr && hw_ptr < end) {
+            hw_ptr = strchr(hw_ptr, ':');
+            if (hw_ptr) {
+                char *quote_start = strchr(hw_ptr, '"');
+                if (quote_start && quote_start < end) {
+                    quote_start++;
+                    char *quote_end = strchr(quote_start, '"');
+                    if (quote_end && quote_end < end) {
+                        size_t len = quote_end - quote_start;
+                        configs[sensor_idx].hw_id = strndup(quote_start, len);
+                    }
+                }
+            }
+        }
+        
+        /* Parse "sensor_id" field */
+        char *id_ptr = strstr(ptr, "\"sensor_id\"");
+        if (id_ptr && id_ptr < end) {
+            id_ptr = strchr(id_ptr, ':');
+            if (id_ptr) {
+                char *quote_start = strchr(id_ptr, '"');
+                if (quote_start && quote_start < end) {
+                    quote_start++;
+                    char *quote_end = strchr(quote_start, '"');
+                    if (quote_end && quote_end < end) {
+                        size_t len = quote_end - quote_start;
+                        configs[sensor_idx].sensor_id = strndup(quote_start, len);
+                    }
+                }
+            }
+        }
+        
+        /* Parse "sensor_name" field */
+        char *name_ptr = strstr(ptr, "\"sensor_name\"");
+        if (name_ptr && name_ptr < end) {
+            name_ptr = strchr(name_ptr, ':');
+            if (name_ptr) {
+                char *quote_start = strchr(name_ptr, '"');
+                if (quote_start && quote_start < end) {
+                    quote_start++;
+                    char *quote_end = strchr(quote_start, '"');
+                    if (quote_end && quote_end < end) {
+                        size_t len = quote_end - quote_start;
+                        configs[sensor_idx].sensor_name = strndup(quote_start, len);
+                    }
+                }
+            }
+        }
+        sensor_idx++;
+        ptr = end + 1;
+    }
+    free(buffer);
+    *count = sensor_idx;
+    return configs;
+}
+
+/*
+ * Free config array
+ */
+static void free_config(sensor_config_t *configs, int count) {
+    if (configs) {
+        for (int i = 0; i < count; i++) {
+            free(configs[i].hw_id);
+            free(configs[i].sensor_id);
+            free(configs[i].sensor_name);
+        }
+        free(configs);
+    }
+}
+
+/*
+ * Find config for a sensor by hardware ID
+ */
+static sensor_config_t *find_sensor_config(sensor_config_t *configs, int count, const char *hw_id) {
+    if (!configs || !hw_id) return NULL;
+    for (int i = 0; i < count; i++) {
+        if (configs[i].hw_id && strcmp(configs[i].hw_id, hw_id) == 0) {
+            return &configs[i];
+        }
+    }
+    return NULL;
 }
 
 /*
@@ -369,10 +524,11 @@ static void *read_sensor_thread(void *arg) {
 /*
  * Print a single sensor result as JSON using sc-prototype template
  */
-static void print_sensor_json(const sensor_result_t *result, int is_first, const char *json_template) {
+static void print_sensor_json(const sensor_result_t *result, int is_first, const char *json_template, sensor_config_t *config) {
     char json[2048];
     char escaped_id[128];
     char escaped_error[256];
+    const char *sensor_id_to_use;
 
     if (!is_first) {
         printf(",");
@@ -382,13 +538,24 @@ static void print_sensor_json(const sensor_result_t *result, int is_first, const
     strncpy(json, json_template, sizeof(json) - 1);
     json[sizeof(json) - 1] = '\0';
 
-    /* Populate the fields */
-    ws_json_escape_string(result->sensor_id, escaped_id, sizeof(escaped_id));
+    /* Determine sensor_id: use config override or default to hardware ID */
+    sensor_id_to_use = (config && config->sensor_id) ? config->sensor_id : result->sensor_id;
+    ws_json_escape_string(sensor_id_to_use, escaped_id, sizeof(escaped_id));
     
     ws_json_replace_null_string(json, "sensor", result->sensor_type);
     ws_json_replace_null_string(json, "measures", "temperature");
     ws_json_replace_null_string(json, "unit", "Celsius");
     ws_json_replace_null_string(json, "sensor_id", escaped_id);
+
+    /* Add sensor_name if provided in config */
+    if (config && config->sensor_name && config->sensor_name[0] != '\0') {
+        ws_json_replace_null_string(json, "sensor_name", config->sensor_name);
+    }
+
+    /* Set internal flag from config */
+    if (config) {
+        ws_json_replace_null_bool(json, "internal", config->internal);
+    }
 
     if (result->has_error) {
         ws_json_escape_string(result->error_msg, escaped_error, sizeof(escaped_error));
@@ -539,6 +706,9 @@ int main(int argc, char *argv[]) {
     int i;
     int output_count = 0;
     int is_first = 1;
+    int location_filter = 0;  /* 0=all, 1=internal only, 2=external only */
+    sensor_config_t *configs = NULL;
+    int config_count = 0;
 
     /* Handle 'identify' command */
     if (argc > 1 && strcmp(argv[1], "identify") == 0) {
@@ -553,6 +723,16 @@ int main(int argc, char *argv[]) {
     /* Handle 'enable' command - add w1-gpio overlay to config.txt */
     if (argc > 1 && strcmp(argv[1], "enable") == 0) {
         return enable_w1_interface();
+    }
+
+    /* Handle 'internal' filter */
+    if (argc > 1 && strcmp(argv[1], "internal") == 0) {
+        location_filter = 1;
+    }
+
+    /* Handle 'external' filter */
+    if (argc > 1 && strcmp(argv[1], "external") == 0) {
+        location_filter = 2;
     }
 
     /* Find all w1_therm sensors */
@@ -593,10 +773,14 @@ int main(int argc, char *argv[]) {
         return WS_EXIT_SUCCESS;
     }
 
+    /* Load config file if it exists */
+    configs = load_config(CONFIG_PATH, &config_count);
+
     /* Get JSON template from sc-prototype (cached) */
     json_template = ws_get_prototype_cached();
     if (json_template == NULL) {
         fprintf(stderr, "Error: Failed to get JSON template from sc-prototype\n");
+        free_config(configs, config_count);
         return 1;
     }
 
@@ -654,7 +838,18 @@ int main(int argc, char *argv[]) {
     printf("[");
     for (i = 0; i < sensor_count; i++) {
         if (results[i].valid) {
-            print_sensor_json(&results[i], is_first, json_template);
+            /* Find config for this sensor */
+            sensor_config_t *sensor_cfg = find_sensor_config(configs, config_count, results[i].sensor_id);
+            
+            /* Apply location filter */
+            if (location_filter == 1 && (!sensor_cfg || !sensor_cfg->internal)) {
+                continue;  /* Skip non-internal sensors */
+            }
+            if (location_filter == 2 && sensor_cfg && sensor_cfg->internal) {
+                continue;  /* Skip internal sensors */
+            }
+            
+            print_sensor_json(&results[i], is_first, json_template, sensor_cfg);
             is_first = 0;
             output_count++;
         } else if (results[i].sensor_id[0] != '\0') {
@@ -662,6 +857,9 @@ int main(int argc, char *argv[]) {
         }
     }
     printf("]\n");
+
+    /* Free config memory */
+    free_config(configs, config_count);
 
     if (output_count == 0) {
         fprintf(stderr, "Warning: No w1_therm sensors detected. Please check your wiring and ensure 1-Wire is enabled.\n");

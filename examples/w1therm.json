@@ -1,0 +1,13 @@
+[
+  {
+    "hw_id": "28-00000a1b2c3d",
+    "sensor_name": "Internal Temperature",
+    "internal": true
+  },
+  {
+    "hw_id": "28-00000e4f5g6h",
+    "sensor_id": "outdoor_temp",
+    "sensor_name": "Garden Sensor",
+    "internal": false
+  }
+]

@@ -1,1 +1,2 @@
 sensor-w1therm usr/bin
+examples/w1therm.json usr/share/doc/sensor-w1therm/examples
