@@ -1,3 +1,9 @@
+sensor-w1therm (1.0.2) stable; urgency=medium
+
+  * Rebuild against libwildlifesystems 1.1.1
+
+ -- Ed Baker <ed@ebaker.me.uk>  Tue, 27 Jan 2026 14:00:00 +0000
+
 sensor-w1therm (1.0.1) stable; urgency=medium
 
   * Refactor to use libwildlifesystems shared library
