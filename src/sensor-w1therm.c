@@ -47,8 +47,14 @@
 /* w1-gpio overlay configuration */
 #define W1_OVERLAY_LINE "dtoverlay=w1-gpio,gpiopin=17,pullup=1"
 
+/* Version information - passed via -DVERSION from Makefile (extracted from debian/changelog) */
+#ifndef VERSION
+#define VERSION "unknown"
+#endif
+
 /* Error values in millidegrees */
-#define STARTUP_VALUE_RAW 85000
+#define STARTUP_VALUE_RAW 85000  /* 85.000°C startup/error value */
+#define INSUFFICIENT_POWER_RAW 127937  /* 127.937°C in millidegrees */
 
 /* Sensor reading result */
 typedef struct {
@@ -108,117 +114,35 @@ static const char *get_sensor_type(const char *sensor_id) {
 }
 
 /*
- * Count sensor objects in JSON buffer
- */
-static int count_sensors_in_json(const char *buffer) {
-    int count = 0;
-    const char *ptr = buffer;
-    while ((ptr = strchr(ptr, '{')) != NULL) {
-        count++;
-        ptr++;
-    }
-    return count;
-}
-
-/*
  * Parse a simple JSON config file - returns dynamically allocated array
  */
 static sensor_config_t *load_config(const char *path, int *count) {
-    FILE *fp;
-    char *buffer = NULL;
-    char *ptr;
-    int sensor_idx = 0;
-    sensor_config_t *configs = NULL;
-    int sensor_count;
-    long file_size;
     *count = 0;
-    fp = fopen(path, "r");
-    if (!fp) return NULL;
-    fseek(fp, 0, SEEK_END);
-    file_size = ftell(fp);
-    fseek(fp, 0, SEEK_SET);
-    if (file_size <= 0) { fclose(fp); return NULL; }
-    buffer = malloc(file_size + 1);
-    if (!buffer) { fclose(fp); return NULL; }
-    size_t bytes_read = fread(buffer, 1, file_size, fp);
-    buffer[bytes_read] = '\0';
-    fclose(fp);
-    sensor_count = count_sensors_in_json(buffer);
+    
+    char *buffer = ws_read_file(path, NULL);
+    if (!buffer) return NULL;
+    
+    int sensor_count = ws_json_count_objects(buffer);
     if (sensor_count == 0) { free(buffer); return NULL; }
-    configs = malloc(sensor_count * sizeof(sensor_config_t));
+    
+    sensor_config_t *configs = malloc(sensor_count * sizeof(sensor_config_t));
     if (!configs) { free(buffer); return NULL; }
-    ptr = buffer;
+    
+    char *ptr = buffer;
+    int sensor_idx = 0;
     while ((ptr = strchr(ptr, '{')) != NULL && sensor_idx < sensor_count) {
         char *end = strchr(ptr, '}');
         if (!end) break;
-        configs[sensor_idx].internal = 0;
-        configs[sensor_idx].hw_id = NULL;
-        configs[sensor_idx].sensor_id = NULL;
-        configs[sensor_idx].sensor_name = NULL;
         
-        /* Parse "internal" field */
-        char *internal_ptr = strstr(ptr, "\"internal\"");
-        if (internal_ptr && internal_ptr < end) {
-            internal_ptr = strchr(internal_ptr, ':');
-            if (internal_ptr) {
-                while (*internal_ptr == ':' || *internal_ptr == ' ') internal_ptr++;
-                configs[sensor_idx].internal = (strncmp(internal_ptr, "true", 4) == 0);
-            }
-        }
+        configs[sensor_idx].internal = ws_json_parse_bool(ptr, end, "internal", 0);
+        configs[sensor_idx].hw_id = ws_json_parse_string(ptr, end, "hw_id");
+        configs[sensor_idx].sensor_id = ws_json_parse_string(ptr, end, "sensor_id");
+        configs[sensor_idx].sensor_name = ws_json_parse_string(ptr, end, "sensor_name");
         
-        /* Parse "hw_id" field */
-        char *hw_ptr = strstr(ptr, "\"hw_id\"");
-        if (hw_ptr && hw_ptr < end) {
-            hw_ptr = strchr(hw_ptr, ':');
-            if (hw_ptr) {
-                char *quote_start = strchr(hw_ptr, '"');
-                if (quote_start && quote_start < end) {
-                    quote_start++;
-                    char *quote_end = strchr(quote_start, '"');
-                    if (quote_end && quote_end < end) {
-                        size_t len = quote_end - quote_start;
-                        configs[sensor_idx].hw_id = strndup(quote_start, len);
-                    }
-                }
-            }
-        }
-        
-        /* Parse "sensor_id" field */
-        char *id_ptr = strstr(ptr, "\"sensor_id\"");
-        if (id_ptr && id_ptr < end) {
-            id_ptr = strchr(id_ptr, ':');
-            if (id_ptr) {
-                char *quote_start = strchr(id_ptr, '"');
-                if (quote_start && quote_start < end) {
-                    quote_start++;
-                    char *quote_end = strchr(quote_start, '"');
-                    if (quote_end && quote_end < end) {
-                        size_t len = quote_end - quote_start;
-                        configs[sensor_idx].sensor_id = strndup(quote_start, len);
-                    }
-                }
-            }
-        }
-        
-        /* Parse "sensor_name" field */
-        char *name_ptr = strstr(ptr, "\"sensor_name\"");
-        if (name_ptr && name_ptr < end) {
-            name_ptr = strchr(name_ptr, ':');
-            if (name_ptr) {
-                char *quote_start = strchr(name_ptr, '"');
-                if (quote_start && quote_start < end) {
-                    quote_start++;
-                    char *quote_end = strchr(quote_start, '"');
-                    if (quote_end && quote_end < end) {
-                        size_t len = quote_end - quote_start;
-                        configs[sensor_idx].sensor_name = strndup(quote_start, len);
-                    }
-                }
-            }
-        }
         sensor_idx++;
         ptr = end + 1;
     }
+    
     free(buffer);
     *count = sensor_idx;
     return configs;
@@ -505,9 +429,8 @@ static void *read_sensor_thread(void *arg) {
         return NULL;
     }
 
-    /* Check for insufficient power value (~127.94°C) */
-    /* The raw value is approximately 127937 millidegrees */
-    if (temp_raw >= 127000 && temp_raw <= 128000) {
+    /* Check for insufficient power value (127.937°C) */
+    if (temp_raw == INSUFFICIENT_POWER_RAW) {
         result->has_error = 1;
         snprintf(result->error_msg, sizeof(result->error_msg), "Insufficient power");
         result->temperature = (double)temp_raw / 1000.0;
@@ -522,48 +445,40 @@ static void *read_sensor_thread(void *arg) {
 }
 
 /*
- * Print a single sensor result as JSON using sc-prototype template
+ * Print a single sensor result as JSON using library helper
  */
-static void print_sensor_json(const sensor_result_t *result, int is_first, const char *json_template, sensor_config_t *config) {
+static void print_sensor_json(const sensor_result_t *result, int is_first, sensor_config_t *config) {
     char json[2048];
-    char escaped_id[128];
-    char escaped_error[256];
     const char *sensor_id_to_use;
+    const char *sensor_name = NULL;
+    bool internal = false;
+    time_t now = time(NULL);
 
     if (!is_first) {
         printf(",");
     }
 
-    /* Start with the template */
-    strncpy(json, json_template, sizeof(json) - 1);
-    json[sizeof(json) - 1] = '\0';
-
     /* Determine sensor_id: use config override or default to hardware ID */
     sensor_id_to_use = (config && config->sensor_id) ? config->sensor_id : result->sensor_id;
-    ws_json_escape_string(sensor_id_to_use, escaped_id, sizeof(escaped_id));
     
-    ws_json_replace_null_string(json, "sensor", result->sensor_type);
-    ws_json_replace_null_string(json, "measures", "temperature");
-    ws_json_replace_null_string(json, "unit", "Celsius");
-    ws_json_replace_null_string(json, "sensor_id", escaped_id);
-
-    /* Add sensor_name if provided in config */
-    if (config && config->sensor_name && config->sensor_name[0] != '\0') {
-        ws_json_replace_null_string(json, "sensor_name", config->sensor_name);
-    }
-
-    /* Set internal flag from config */
     if (config) {
-        ws_json_replace_null_bool(json, "internal", config->internal);
-    }
-
-    if (result->has_error) {
-        ws_json_escape_string(result->error_msg, escaped_error, sizeof(escaped_error));
-        ws_json_replace_null_string(json, "error", escaped_error);
+        sensor_name = config->sensor_name;
+        internal = config->internal;
     }
     
-    /* Always output value if we have a temperature reading */
-    ws_json_replace_null_number(json, "value", result->temperature);
+    /* Build base JSON with common fields */
+    if (ws_build_sensor_json_base(json, sizeof(json),
+                                   result->sensor_type, "temperature", "Celsius",
+                                   sensor_id_to_use, sensor_name,
+                                   internal, now) != 0) {
+        return;
+    }
+
+    /* Add value or error */
+    if (result->has_error) {
+        ws_sensor_json_set_error(json, result->error_msg);
+    }
+    ws_sensor_json_set_value(json, result->temperature, 3);
 
     printf("%s", json);
 }
@@ -700,39 +615,50 @@ int main(int argc, char *argv[]) {
     sensor_result_t results[MAX_SENSORS];
     thread_args_t thread_args[MAX_SENSORS];
     pthread_t threads[MAX_SENSORS];
-    const char *json_template;
     int sensor_count;
     int master_count;
     int i;
     int output_count = 0;
     int is_first = 1;
-    int location_filter = 0;  /* 0=all, 1=internal only, 2=external only */
+    ws_location_filter_t location_filter = WS_LOCATION_ALL;
     sensor_config_t *configs = NULL;
     int config_count = 0;
 
-    /* Handle 'identify' command */
-    if (argc > 1 && strcmp(argv[1], "identify") == 0) {
-        ws_cmd_identify();
-    }
-
-    /* Handle 'list' command */
-    if (argc > 1 && strcmp(argv[1], "list") == 0) {
-        ws_cmd_list_single("temperature");
-    }
-
-    /* Handle 'enable' command - add w1-gpio overlay to config.txt */
-    if (argc > 1 && strcmp(argv[1], "enable") == 0) {
-        return enable_w1_interface();
-    }
-
-    /* Handle 'internal' filter */
-    if (argc > 1 && strcmp(argv[1], "internal") == 0) {
-        location_filter = 1;
-    }
-
-    /* Handle 'external' filter */
-    if (argc > 1 && strcmp(argv[1], "external") == 0) {
-        location_filter = 2;
+    /* Handle command-line arguments */
+    if (argc > 1) {
+        if (strcmp(argv[1], "identify") == 0) {
+            ws_cmd_identify();
+        } else if (strcmp(argv[1], "list") == 0) {
+            ws_cmd_list_single("temperature");
+        } else if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0 ||
+                   strcmp(argv[1], "version") == 0) {
+            ws_print_version("sensor-w1therm", VERSION);
+            return WS_EXIT_SUCCESS;
+        } else if (strcmp(argv[1], "enable") == 0) {
+            return enable_w1_interface();
+        } else if (strcmp(argv[1], "internal") == 0) {
+            location_filter = WS_LOCATION_INTERNAL;
+        } else if (strcmp(argv[1], "external") == 0) {
+            location_filter = WS_LOCATION_EXTERNAL;
+        } else if (strcmp(argv[1], "setup") == 0) {
+            /* Handled below after finding sensors */
+        } else if (strcmp(argv[1], "mock") == 0) {
+            /* Output mock data for testing without hardware */
+            char *serial = ws_get_serial_with_suffix("w1therm_mock");
+            time_t now = time(NULL);
+            char json[2048];
+            if (ws_build_sensor_json_base(json, sizeof(json), "ds18b20", "temperature", "Celsius",
+                                          serial, "Mock DS18B20", false, now) == 0) {
+                ws_sensor_json_set_value(json, 21.375, 3);
+                printf("[%s]\n", json);
+            }
+            free(serial);
+            return WS_EXIT_SUCCESS;
+        } else if (strcmp(argv[1], "all") != 0) {
+            fprintf(stderr, "Unknown command: %s\n", argv[1]);
+            fprintf(stderr, "Usage: sensor-w1therm [--version|identify|list|setup|enable|mock|internal|external|all]\n");
+            return WS_EXIT_INVALID_ARG;
+        }
     }
 
     /* Find all w1_therm sensors */
@@ -775,14 +701,6 @@ int main(int argc, char *argv[]) {
 
     /* Load config file if it exists */
     configs = load_config(CONFIG_PATH, &config_count);
-
-    /* Get JSON template from sc-prototype (cached) */
-    json_template = ws_get_prototype_cached();
-    if (json_template == NULL) {
-        fprintf(stderr, "Error: Failed to get JSON template from sc-prototype\n");
-        free_config(configs, config_count);
-        return 1;
-    }
 
     /* Initialize results */
     memset(results, 0, sizeof(results));
@@ -842,14 +760,14 @@ int main(int argc, char *argv[]) {
             sensor_config_t *sensor_cfg = find_sensor_config(configs, config_count, results[i].sensor_id);
             
             /* Apply location filter */
-            if (location_filter == 1 && (!sensor_cfg || !sensor_cfg->internal)) {
+            if (location_filter == WS_LOCATION_INTERNAL && (!sensor_cfg || !sensor_cfg->internal)) {
                 continue;  /* Skip non-internal sensors */
             }
-            if (location_filter == 2 && sensor_cfg && sensor_cfg->internal) {
+            if (location_filter == WS_LOCATION_EXTERNAL && sensor_cfg && sensor_cfg->internal) {
                 continue;  /* Skip internal sensors */
             }
             
-            print_sensor_json(&results[i], is_first, json_template, sensor_cfg);
+            print_sensor_json(&results[i], is_first, sensor_cfg);
             is_first = 0;
             output_count++;
         } else if (results[i].sensor_id[0] != '\0') {

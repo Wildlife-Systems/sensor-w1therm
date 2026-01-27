@@ -1,0 +1,21 @@
+# bash completion for sensor-w1therm
+
+_sensor_w1therm() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    # Available commands
+    opts="--version -v version identify list setup enable mock internal external all"
+
+    # Complete with available commands
+    if [[ ${COMP_CWORD} -eq 1 ]]; then
+        COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+        return 0
+    fi
+
+    return 0
+}
+
+complete -F _sensor_w1therm sensor-w1therm

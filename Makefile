@@ -4,8 +4,8 @@
 # https://wildlife.systems
 
 CC = gcc
-CFLAGS = -Wall -Wextra -O2 -D_GNU_SOURCE -I/usr/include/ws
-LDFLAGS = -pthread -lwildlifesystems
+CFLAGS = $(EXTRA_CFLAGS) -Wall -Wextra -O2 -D_GNU_SOURCE -I/usr/include/ws
+LDFLAGS = $(EXTRA_LDFLAGS) -pthread -lwildlifesystems
 
 PREFIX ?= /usr
 BINDIR = $(PREFIX)/bin
