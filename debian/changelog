@@ -1,3 +1,13 @@
+sensor-w1therm (1.0.1) stable; urgency=medium
+
+  * Refactor to use libwildlifesystems shared library
+  * Add setup, enable, mock commands for consistent CLI
+  * Add STARTUP_VALUE_RAW and INSUFFICIENT_POWER_RAW constants
+  * Add bash-completion support
+  * Update man page with all commands
+
+ -- Ed Baker <ed@ebaker.me.uk>  Mon, 27 Jan 2026 12:00:00 +0000
+
 sensor-w1therm (1.0.0) stable; urgency=medium
 
   * Initial C implementation
