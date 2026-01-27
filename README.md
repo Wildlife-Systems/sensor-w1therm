@@ -113,10 +113,6 @@ sensor-w1therm mock
 
 2. Reboot the Raspberry Pi
 
-3. The 1-Wire kernel modules are loaded automatically.
-
-4. Connected sensors will appear in `/sys/bus/w1/devices/` with their family code prefix.
-
 ## Sysfs Interface
 
 The program uses the Linux kernel `w1_therm` driver sysfs interface:
@@ -132,8 +128,7 @@ For more information, see the [kernel documentation](https://docs.kernel.org/w1/
 The program detects and reports the following error conditions:
 
 - **Startup value (85.0°C)**: Indicates the sensor has not completed a conversion yet
-- **Insufficient power (~127.94°C)**: Indicates the sensor is not receiving adequate power
-- **CRC failure**: Indicates a communication error with the sensor
+- **Insufficient power (127.937°C)**: Indicates the kernel driver detected a power or bus error (not that the sensor is completely unpowered)
 
 ## Building the Debian Package
 
@@ -151,7 +146,7 @@ debuild -us -uc -b
 
 ## License
 
-MIT License
+GPL-2.0-or-later
 
 ## Author
 
