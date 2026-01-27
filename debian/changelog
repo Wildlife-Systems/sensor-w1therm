@@ -6,7 +6,7 @@ sensor-w1therm (1.0.1) stable; urgency=medium
   * Add bash-completion support
   * Update man page with all commands
 
- -- Ed Baker <ed@ebaker.me.uk>  Mon, 27 Jan 2026 12:00:00 +0000
+ -- Ed Baker <ed@ebaker.me.uk>  Tue, 27 Jan 2026 12:00:00 +0000
 
 sensor-w1therm (1.0.0) stable; urgency=medium
 
