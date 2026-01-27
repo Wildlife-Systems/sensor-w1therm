@@ -148,6 +148,10 @@ debuild -us -uc -b
 
 GPL-2.0-or-later
 
+## Documentation
+
+[Comparison with older Bash version](https://reports.ebaker.me.uk/WS-sensor-w1therm.html)
+
 ## Author
 
 Ed Baker <ed@ebaker.me.uk>
