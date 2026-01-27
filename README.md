@@ -57,6 +57,19 @@ Output example:
 [{"sensor":"ds18b20","measures":"temperature","unit":"Celsius","sensor_id":"28-0123456789ab","value":23.500}]
 ```
 
+### Filter by location
+
+```bash
+# Read only internal sensors
+sensor-w1therm internal
+
+# Read only external sensors
+sensor-w1therm external
+
+# Read all sensors explicitly
+sensor-w1therm all
+```
+
 ### Configure sensors for fast reading
 
 ```bash
@@ -78,6 +91,18 @@ sensor-w1therm identify
 ```
 
 Returns exit code 60.
+
+### Show version
+
+```bash
+sensor-w1therm version
+```
+
+### Output mock data for testing
+
+```bash
+sensor-w1therm mock
+```
 
 ## Hardware Configuration
 
