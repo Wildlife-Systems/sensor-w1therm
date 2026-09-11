@@ -5,7 +5,6 @@ Source: https://github.com/WildlifeSystems/sensor-w1therm
 
 Files: *
 Copyright: 2024-2026 Ed Baker <ed@ebaker.me.uk>
-
 License: GPL-2+
 
 License: GPL-2+
@@ -22,3 +21,6 @@ License: GPL-2+
  You should have received a copy of the GNU General Public License
  along with this program; if not, write to the Free Software
  Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
+ .
+ On Debian systems, the complete text of the GNU General Public License
+ version 2 can be found in "/usr/share/common-licenses/GPL-2".
