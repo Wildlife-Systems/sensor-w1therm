@@ -1,3 +1,18 @@
+sensor-w1therm (1.1.0) stable; urgency=medium
+
+  * Report device from the 1-Wire family code, so a DS1822 reports "ds1822"
+    rather than being conflated with DS18B20
+  * Report the sensor's configured location
+  * Support "location" in /etc/ws/sensors/w1therm.json
+  * Use ws_json_object_end for config object bounds, so a config entry may
+    contain nested objects
+  * Rebuild against libwildlifesystems 1.2.0
+  * Require libwildlifesystems-dev (>= 1.2.0) and sensor-control (>= 1.3.0):
+    an older sc-prototype has no device or location field, and the new
+    values would be dropped silently rather than failing
+
+ -- Ed Baker <ed@ebaker.me.uk>  Fri, 11 Sep 2026 16:00:00 +0100
+
 sensor-w1therm (1.0.3) stable; urgency=medium
 
   * Rebuild against libwildlifesystems 1.1.1
