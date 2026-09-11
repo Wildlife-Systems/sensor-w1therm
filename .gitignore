@@ -1,6 +1,9 @@
 # Compiled binary
 sensor-ds18b20
 
+# Cygwin and MinGW gcc append .exe, which a bare binary name does not match
+*.exe
+
 # Object files
 *.o
 *.obj
