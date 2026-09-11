@@ -78,6 +78,7 @@ typedef struct {
     char *sensor_id;    /* Override sensor_id in output */
     char *sensor_name;  /* Human-readable name */
     int internal;       /* 1 if internal, 0 if external */
+    ws_location_t location;  /* Where the sensor physically sits */
 } sensor_config_t;
 
 /* Supported w1_therm family codes */
@@ -140,7 +141,8 @@ static sensor_config_t *load_config(const char *path, int *count) {
         configs[sensor_idx].hw_id = ws_json_parse_string(ptr, end, "hw_id");
         configs[sensor_idx].sensor_id = ws_json_parse_string(ptr, end, "sensor_id");
         configs[sensor_idx].sensor_name = ws_json_parse_string(ptr, end, "sensor_name");
-        
+        ws_parse_sensor_location(ptr, end, &configs[sensor_idx].location);
+
         sensor_idx++;
         ptr = end + 1;
     }
@@ -454,6 +456,7 @@ static void print_sensor_json(const sensor_result_t *result, int is_first, senso
     const char *sensor_id_to_use;
     const char *sensor_name = NULL;
     bool internal = false;
+    const ws_location_t *location = NULL;
     time_t now = time(NULL);
 
     if (!is_first) {
@@ -466,13 +469,15 @@ static void print_sensor_json(const sensor_result_t *result, int is_first, senso
     if (config) {
         sensor_name = config->sensor_name;
         internal = config->internal;
+        location = &config->location;
     }
     
     /* Build base JSON with common fields */
     if (ws_build_sensor_json_base(json, sizeof(json),
-                                   result->sensor_type, "temperature", "Celsius",
+                                   result->sensor_type, result->sensor_type,
+                                   "temperature", "Celsius",
                                    sensor_id_to_use, sensor_name,
-                                   internal, now) != 0) {
+                                   internal, location, now) != 0) {
         return;
     }
 
@@ -649,8 +654,9 @@ int main(int argc, char *argv[]) {
             char *serial = ws_get_serial_with_suffix("w1therm_mock");
             time_t now = time(NULL);
             char json[2048];
-            if (ws_build_sensor_json_base(json, sizeof(json), "ds18b20", "temperature", "Celsius",
-                                          serial, "Mock DS18B20", false, now) == 0) {
+            if (ws_build_sensor_json_base(json, sizeof(json), "ds18b20", "ds18b20",
+                                          "temperature", "Celsius",
+                                          serial, "Mock DS18B20", false, NULL, now) == 0) {
                 ws_sensor_json_set_value(json, 21.375, 3);
                 printf("[%s]\n", json);
             }
