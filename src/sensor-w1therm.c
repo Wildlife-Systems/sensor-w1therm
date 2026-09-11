@@ -5,7 +5,7 @@
  * https://wildlife.systems
  *
  * Author: Ed Baker <ed@ebaker.me.uk>
- * License: MIT
+ * License: GPL-2+
  *
  * This program reads temperature data from 1-Wire temperature sensors
  * supported by the Linux kernel w1_therm driver interface.
