@@ -128,10 +128,12 @@ static sensor_config_t *load_config(const char *path, int *count) {
     sensor_config_t *configs = malloc(sensor_count * sizeof(sensor_config_t));
     if (!configs) { free(buffer); return NULL; }
     
-    char *ptr = buffer;
+    const char *ptr = buffer;
     int sensor_idx = 0;
     while ((ptr = strchr(ptr, '{')) != NULL && sensor_idx < sensor_count) {
-        char *end = strchr(ptr, '}');
+        /* Matching brace, not the first one: a config entry may contain nested
+           objects or braces inside string values. */
+        const char *end = ws_json_object_end(ptr);
         if (!end) break;
         
         configs[sensor_idx].internal = ws_json_parse_bool(ptr, end, "internal", 0);
