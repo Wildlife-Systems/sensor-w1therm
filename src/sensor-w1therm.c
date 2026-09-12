@@ -445,31 +445,30 @@ static void *read_sensor_thread(void *arg) {
 /*
  * Print a single sensor result as JSON using library helper
  */
-static void print_sensor_json(const sensor_result_t *result, int is_first, sensor_config_t *config) {
+static void append_sensor_json(ws_json_array_builder_t *out,
+                               const sensor_result_t *result,
+                               sensor_config_t *config) {
     char json[2048];
     const char *sensor_id_to_use;
     const char *sensor_name = NULL;
-    bool internal = false;
     const ws_location_t *location = NULL;
+    bool internal = false;
     time_t now = time(NULL);
 
-    if (!is_first) {
-        printf(",");
-    }
-
     /* Determine sensor_id: use config override or default to hardware ID */
-    sensor_id_to_use = (config && config->base.sensor_id) ? config->base.sensor_id : result->sensor_id;
-    
+    sensor_id_to_use = (config && config->base.sensor_id) ? config->base.sensor_id
+                                                          : result->sensor_id;
+
     if (config) {
         sensor_name = config->base.sensor_name;
         internal = config->base.internal;
         location = &config->base.location;
     }
-    
+
     /* Build base JSON with common fields */
     if (ws_build_sensor_json_base(json, sizeof(json),
                                    result->sensor_type, result->sensor_type,
-                                   "temperature", "Celsius",
+                                   "temperature", WS_UNIT_CELSIUS,
                                    sensor_id_to_use, sensor_name,
                                    internal, location, now) != 0) {
         return;
@@ -479,7 +478,7 @@ static void print_sensor_json(const sensor_result_t *result, int is_first, senso
     ws_sensor_json_set_result(json, sizeof(json), result->temperature, 3,
                               result->has_error ? result->error_msg : NULL);
 
-    printf("%s", json);
+    ws_json_array_add(out, json);
 }
 
 /*
@@ -618,7 +617,7 @@ int main(int argc, char *argv[]) {
     int master_count;
     int i;
     int output_count = 0;
-    int is_first = 1;
+    ws_json_array_builder_t out;
     ws_location_filter_t location_filter = WS_LOCATION_ALL;
     sensor_config_t *configs = NULL;
     int config_count = 0;
@@ -647,7 +646,7 @@ int main(int argc, char *argv[]) {
             time_t now = time(NULL);
             char json[2048];
             if (ws_build_sensor_json_base(json, sizeof(json), "ds18b20", "ds18b20",
-                                          "temperature", "Celsius",
+                                          "temperature", WS_UNIT_CELSIUS,
                                           serial, "Mock DS18B20", false, NULL, now) == 0) {
                 ws_sensor_json_set_value(json, 21.375, 3);
                 printf("[%s]\n", json);
@@ -753,12 +752,17 @@ int main(int argc, char *argv[]) {
     }
 
     /* Output JSON array */
-    printf("[");
+    if (ws_json_array_init(&out) != 0) {
+        fprintf(stderr, "Memory allocation failed\n");
+        free_config(configs, config_count);
+        return WS_EXIT_INVALID_ARG;
+    }
+
     for (i = 0; i < sensor_count; i++) {
         if (results[i].valid) {
             /* Find config for this sensor */
             sensor_config_t *sensor_cfg = find_sensor_config(configs, config_count, results[i].sensor_id);
-            
+
             /* Apply location filter */
             if (location_filter == WS_LOCATION_INTERNAL && (!sensor_cfg || !sensor_cfg->base.internal)) {
                 continue;  /* Skip non-internal sensors */
@@ -766,15 +770,21 @@ int main(int argc, char *argv[]) {
             if (location_filter == WS_LOCATION_EXTERNAL && sensor_cfg && sensor_cfg->base.internal) {
                 continue;  /* Skip internal sensors */
             }
-            
-            print_sensor_json(&results[i], is_first, sensor_cfg);
-            is_first = 0;
+
+            append_sensor_json(&out, &results[i], sensor_cfg);
             output_count++;
         } else if (results[i].sensor_id[0] != '\0') {
             fprintf(stderr, "Warning: Failed to read sensor at %s\n", folders[i]);
         }
     }
-    printf("]\n");
+
+    ws_json_array_end(&out);
+    if (ws_json_array_get(&out)) {
+        printf("%s\n", ws_json_array_get(&out));
+    } else {
+        fprintf(stderr, "Memory allocation failed\n");
+    }
+    ws_json_array_free(&out);
 
     /* Free config memory */
     free_config(configs, config_count);
