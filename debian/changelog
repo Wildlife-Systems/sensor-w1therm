@@ -1,3 +1,15 @@
+sensor-w1therm (1.2.0) stable; urgency=medium
+
+  * Rebuild against libwildlifesystems 1.3.0, so "{{node}}" in a sensor's
+    location resolves to the node's own coordinates from /etc/geolocation
+    instead of being emitted as an unresolved token
+  * Require libwildlifesystems-dev (>= 1.3.0). The library is static, so the
+    behaviour above is fixed at build time: a binary built against 1.2.0 would
+    satisfy the old pin and silently emit unresolved tokens under the same
+    package version
+
+ -- Ed Baker <ed@ebaker.me.uk>  Sat, 12 Sep 2026 14:00:00 +0100
+
 sensor-w1therm (1.1.0) stable; urgency=medium
 
   * Report device from the 1-Wire family code, so a DS1822 reports "ds1822"
