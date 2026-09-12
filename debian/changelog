@@ -1,5 +1,15 @@
 sensor-w1therm (1.2.0) stable; urgency=medium
 
+  * A sensor that cannot be read is emitted with "value":null and the reason in
+    "error", as sensor-dht11 and sensor-bme680 do, rather than dropped with a
+    warning on stderr. Dropping it made a failed probe indistinguishable from
+    one that was never there, and "sr check", which looks for expected
+    sensor_ids in the output, is the tool meant to tell the difference. The
+    "No w1_therm sensors detected" warning that also fired when a filter
+    excluded every sensor is gone, being wrong in that case
+  * Join only the threads that were started. When pthread_create failed the
+    sensor was read synchronously and the unstarted thread joined anyway,
+    which is undefined behaviour
   * Fail with nothing printed, exit 20, when sc-prototype is unavailable,
     checked once before any conversion is triggered. Every reading used to be
     skipped individually and "[]" printed with exit 0, which claims the node

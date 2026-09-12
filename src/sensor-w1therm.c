@@ -52,14 +52,16 @@
 #define STARTUP_VALUE_RAW 85000  /* 85.000°C startup/error value */
 #define INSUFFICIENT_POWER_RAW 127937  /* 127.937°C in millidegrees */
 
-/* Sensor reading result */
+/* Sensor reading result. Every discovered sensor produces one, and every one
+   is emitted: a sensor that could not be read is reported with the reason in
+   error_msg rather than left out, so a consumer can tell "this probe has
+   failed" from "this probe was never here". */
 typedef struct {
     char sensor_id[64];
     char sensor_type[16];
     double temperature;
     int has_error;
     char error_msg[128];
-    int valid;
 } sensor_result_t;
 
 /* Thread arguments */
@@ -404,14 +406,15 @@ static void *read_sensor_thread(void *arg) {
     if (read_temperature_file(args->folder_path, &temp_raw) != 0) {
         /* Fall back to w1_slave file */
         if (read_w1_slave(args->folder_path, &temp_raw) != 0) {
+            /* Reported, not dropped: the other drivers emit a failed read
+               as value null with the reason, and "sr check" relies on a
+               failing sensor still appearing in the output. */
             result->has_error = 1;
-            snprintf(result->error_msg, sizeof(result->error_msg), "Failed to read sensor");
-            result->valid = 0;
+            snprintf(result->error_msg, sizeof(result->error_msg),
+                     "Failed to read sensor: temperature and w1_slave both unreadable");
             return NULL;
         }
     }
-
-    result->valid = 1;
 
     /* Check for startup value (85.000°C = 85000 millidegrees) */
     if (temp_raw == STARTUP_VALUE_RAW) {
@@ -510,10 +513,10 @@ int main(int argc, char *argv[]) {
     sensor_result_t results[MAX_SENSORS];
     thread_args_t thread_args[MAX_SENSORS];
     pthread_t threads[MAX_SENSORS];
+    bool thread_started[MAX_SENSORS];
     int sensor_count;
     int master_count;
     int i;
-    int output_count = 0;
     ws_json_array_builder_t out;
     /* What this driver measures: the one source for the list command,
        the measurement filters it accepts, and its usage line. */
@@ -649,15 +652,20 @@ int main(int argc, char *argv[]) {
         thread_args[i].result = &results[i];
         snprintf(thread_args[i].folder_path, sizeof(thread_args[i].folder_path), "%.511s", folders[i]);
 
-        if (pthread_create(&threads[i], NULL, read_sensor_thread, &thread_args[i]) != 0) {
+        thread_started[i] = pthread_create(&threads[i], NULL, read_sensor_thread,
+                                           &thread_args[i]) == 0;
+        if (!thread_started[i]) {
             /* If thread creation fails, read synchronously */
             read_sensor_thread(&thread_args[i]);
         }
     }
 
-    /* Wait for all threads to complete */
+    /* Wait for the threads that were started. Joining one that was not is
+       undefined, and used to happen whenever the fallback above ran. */
     for (i = 0; i < sensor_count; i++) {
-        pthread_join(threads[i], NULL);
+        if (thread_started[i]) {
+            pthread_join(threads[i], NULL);
+        }
     }
 
     /* Output JSON array */
@@ -668,23 +676,20 @@ int main(int argc, char *argv[]) {
     }
 
     for (i = 0; i < sensor_count; i++) {
-        if (results[i].valid) {
-            /* Find config for this sensor */
-            sensor_config_t *sensor_cfg = find_sensor_config(configs, config_count, results[i].sensor_id);
+        /* Find config for this sensor */
+        sensor_config_t *sensor_cfg = find_sensor_config(configs, config_count, results[i].sensor_id);
 
-            /* Apply location filter */
-            if (location_filter == WS_LOCATION_INTERNAL && (!sensor_cfg || !sensor_cfg->base.internal)) {
-                continue;  /* Skip non-internal sensors */
-            }
-            if (location_filter == WS_LOCATION_EXTERNAL && sensor_cfg && sensor_cfg->base.internal) {
-                continue;  /* Skip internal sensors */
-            }
-
-            append_sensor_json(&out, &results[i], sensor_cfg);
-            output_count++;
-        } else if (results[i].sensor_id[0] != '\0') {
-            fprintf(stderr, "Warning: Failed to read sensor at %s\n", folders[i]);
+        /* Apply location filter */
+        if (location_filter == WS_LOCATION_INTERNAL && (!sensor_cfg || !sensor_cfg->base.internal)) {
+            continue;  /* Skip non-internal sensors */
         }
+        if (location_filter == WS_LOCATION_EXTERNAL && sensor_cfg && sensor_cfg->base.internal) {
+            continue;  /* Skip internal sensors */
+        }
+
+        /* Emitted whether or not the read succeeded; a failure carries its
+           reason in "error" with "value" null, as the other drivers do. */
+        append_sensor_json(&out, &results[i], sensor_cfg);
     }
 
     ws_json_array_end(&out);
@@ -697,10 +702,6 @@ int main(int argc, char *argv[]) {
 
     /* Free config memory */
     free_config(configs, config_count);
-
-    if (output_count == 0) {
-        fprintf(stderr, "Warning: No w1_therm sensors detected. Please check your wiring and ensure 1-Wire is enabled.\n");
-    }
 
     return WS_EXIT_SUCCESS;
 }
