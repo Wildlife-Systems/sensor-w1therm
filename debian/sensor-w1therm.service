@@ -1,6 +1,6 @@
 [Unit]
 Description=Configure w1_therm sensors for fast reading
-Documentation=man:sensor-ds18b20(1)
+Documentation=man:sensor-w1therm(1)
 After=multi-user.target
 
 [Service]

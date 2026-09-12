@@ -1,0 +1,2 @@
+# We use "stable" for our own APT repository
+sensor-w1therm source: bad-distribution-in-changes-file stable
