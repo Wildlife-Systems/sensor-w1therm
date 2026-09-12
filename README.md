@@ -125,8 +125,12 @@ For more information, see the [kernel documentation](https://docs.kernel.org/w1/
 
 ## Error Handling
 
-The program detects and reports the following error conditions:
+Every sensor found on the bus is reported. A sensor that cannot be read is
+still emitted, with `value` null and the reason in `error`, as the other
+WildlifeSystems drivers do; a sensor absent from the output was not found on
+the bus at all. The reported error conditions are:
 
+- **Failed to read sensor**: neither the `temperature` nor the `w1_slave` sysfs file could be read, typically a permissions problem or a probe that dropped off the bus mid-read
 - **Startup value (85.0°C)**: Indicates the sensor has not completed a conversion yet
 - **Insufficient power (127.937°C)**: Indicates the kernel driver detected a power or bus error (not that the sensor is completely unpowered)
 
