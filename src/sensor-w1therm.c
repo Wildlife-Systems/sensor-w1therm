@@ -72,13 +72,11 @@ typedef struct {
     sensor_result_t *result;
 } thread_args_t;
 
-/* Sensor configuration from config file */
+/* Sensor configuration from config file.
+ * The fields every driver shares live in base; hw_id is ours alone. */
 typedef struct {
+    ws_sensor_config_base_t base;
     char *hw_id;        /* Hardware ID to match (e.g., "28-00000a1b2c3d") */
-    char *sensor_id;    /* Override sensor_id in output */
-    char *sensor_name;  /* Human-readable name */
-    int internal;       /* 1 if internal, 0 if external */
-    ws_location_t location;  /* Where the sensor physically sits */
 } sensor_config_t;
 
 /* Supported w1_therm family codes */
@@ -118,37 +116,32 @@ static const char *get_sensor_type(const char *sensor_id) {
  * Parse a simple JSON config file - returns dynamically allocated array
  */
 static sensor_config_t *load_config(const char *path, int *count) {
-    *count = 0;
-    
-    char *buffer = ws_read_file(path, NULL);
-    if (!buffer) return NULL;
-    
-    int sensor_count = ws_json_count_objects(buffer);
-    if (sensor_count == 0) { free(buffer); return NULL; }
-    
-    sensor_config_t *configs = malloc(sensor_count * sizeof(sensor_config_t));
-    if (!configs) { free(buffer); return NULL; }
-    
-    const char *ptr = buffer;
-    int sensor_idx = 0;
-    while ((ptr = strchr(ptr, '{')) != NULL && sensor_idx < sensor_count) {
-        /* Matching brace, not the first one: a config entry may contain nested
-           objects or braces inside string values. */
-        const char *end = ws_json_object_end(ptr);
-        if (!end) break;
-        
-        configs[sensor_idx].internal = ws_json_parse_bool(ptr, end, "internal", 0);
-        configs[sensor_idx].hw_id = ws_json_parse_string(ptr, end, "hw_id");
-        configs[sensor_idx].sensor_id = ws_json_parse_string(ptr, end, "sensor_id");
-        configs[sensor_idx].sensor_name = ws_json_parse_string(ptr, end, "sensor_name");
-        ws_parse_sensor_location(ptr, end, &configs[sensor_idx].location);
+    ws_config_iter_t it;
+    sensor_config_t *configs;
+    const char *entry, *entry_end;
+    int n, idx = 0;
 
-        sensor_idx++;
-        ptr = end + 1;
+    *count = 0;
+
+    n = ws_config_iter_open(&it, path);
+    if (n <= 0) {
+        ws_config_iter_close(&it);
+        return NULL;
     }
-    
-    free(buffer);
-    *count = sensor_idx;
+
+    configs = calloc((size_t)n, sizeof(*configs));
+    if (!configs) {
+        ws_config_iter_close(&it);
+        return NULL;
+    }
+
+    while (ws_config_iter_next(&it, &configs[idx].base, &entry, &entry_end)) {
+        configs[idx].hw_id = ws_json_parse_string(entry, entry_end, "hw_id");
+        idx++;
+    }
+
+    ws_config_iter_close(&it);
+    *count = idx;
     return configs;
 }
 
@@ -158,9 +151,8 @@ static sensor_config_t *load_config(const char *path, int *count) {
 static void free_config(sensor_config_t *configs, int count) {
     if (configs) {
         for (int i = 0; i < count; i++) {
+            ws_sensor_config_free_fields(&configs[i].base);
             free(configs[i].hw_id);
-            free(configs[i].sensor_id);
-            free(configs[i].sensor_name);
         }
         free(configs);
     }
@@ -466,12 +458,12 @@ static void print_sensor_json(const sensor_result_t *result, int is_first, senso
     }
 
     /* Determine sensor_id: use config override or default to hardware ID */
-    sensor_id_to_use = (config && config->sensor_id) ? config->sensor_id : result->sensor_id;
+    sensor_id_to_use = (config && config->base.sensor_id) ? config->base.sensor_id : result->sensor_id;
     
     if (config) {
-        sensor_name = config->sensor_name;
-        internal = config->internal;
-        location = &config->location;
+        sensor_name = config->base.sensor_name;
+        internal = config->base.internal;
+        location = &config->base.location;
     }
     
     /* Build base JSON with common fields */
@@ -768,10 +760,10 @@ int main(int argc, char *argv[]) {
             sensor_config_t *sensor_cfg = find_sensor_config(configs, config_count, results[i].sensor_id);
             
             /* Apply location filter */
-            if (location_filter == WS_LOCATION_INTERNAL && (!sensor_cfg || !sensor_cfg->internal)) {
+            if (location_filter == WS_LOCATION_INTERNAL && (!sensor_cfg || !sensor_cfg->base.internal)) {
                 continue;  /* Skip non-internal sensors */
             }
-            if (location_filter == WS_LOCATION_EXTERNAL && sensor_cfg && sensor_cfg->internal) {
+            if (location_filter == WS_LOCATION_EXTERNAL && sensor_cfg && sensor_cfg->base.internal) {
                 continue;  /* Skip internal sensors */
             }
             
