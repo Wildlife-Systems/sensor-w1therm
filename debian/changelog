@@ -3,6 +3,11 @@ sensor-w1therm (1.2.0) stable; urgency=medium
   * Rebuild against libwildlifesystems 1.3.0, so "{{node}}" in a sensor's
     location resolves to the node's own coordinates from /etc/geolocation
     instead of being emitted as an unresolved token
+  * Accept "temperature", which list advertises and which was previously
+    rejected with exit 20. It reports temperature alone, so naming it asks for
+    everything
+  * The usage line is generated from the measurement list rather than written by
+    hand
   * "mock" is a table of values passed to the library rather than hand-built
     JSON, so it cannot drift from the real output format. It also gains the
     missing-serial fallback the other drivers had, having previously emitted

@@ -515,6 +515,9 @@ int main(int argc, char *argv[]) {
     int i;
     int output_count = 0;
     ws_json_array_builder_t out;
+    /* What this driver measures: the one source for the list command,
+       the measurement filters it accepts, and its usage line. */
+    static const char *measurements[] = {"temperature", NULL};
     ws_location_filter_t location_filter = WS_LOCATION_ALL;
     sensor_config_t *configs = NULL;
     int config_count = 0;
@@ -524,7 +527,7 @@ int main(int argc, char *argv[]) {
         if (strcmp(argv[1], "identify") == 0) {
             ws_cmd_identify();
         } else if (strcmp(argv[1], "list") == 0) {
-            ws_cmd_list_single("temperature");
+            ws_cmd_list_multiple(measurements);
         } else if (strcmp(argv[1], "--version") == 0 || strcmp(argv[1], "-v") == 0 ||
                    strcmp(argv[1], "version") == 0) {
             ws_print_version("sensor-w1therm", VERSION);
@@ -534,6 +537,9 @@ int main(int argc, char *argv[]) {
                                              "dtoverlay=w1-gpio",
                                              "1-Wire interface",
                                              "sensor-w1therm");
+        } else if (ws_arg_is_measurement(argv[1], measurements)) {
+            /* Temperature is all this driver reports, so naming it asks for
+               everything. It is accepted because list advertises it. */
         } else if (strcmp(argv[1], "internal") == 0) {
             location_filter = WS_LOCATION_INTERNAL;
         } else if (strcmp(argv[1], "external") == 0) {
@@ -552,9 +558,7 @@ int main(int argc, char *argv[]) {
             return ws_cmd_mock("ds18b20", "w1therm_mock", "Mock DS18B20",
                                mock, sizeof(mock) / sizeof(mock[0]));
         } else if (strcmp(argv[1], "all") != 0) {
-            fprintf(stderr, "Unknown command: %s\n", argv[1]);
-            fprintf(stderr, "Usage: sensor-w1therm [--version|identify|list|setup|enable|mock|internal|external|all]\n");
-            return WS_EXIT_INVALID_ARG;
+            return ws_cmd_unknown_arg("sensor-w1therm", argv[1], measurements);
         }
     }
 
