@@ -1,5 +1,8 @@
 sensor-w1therm (1.2.0) stable; urgency=medium
 
+  * A reading's timestamp is taken in the thread that obtained the value,
+    not at output time after every thread has been joined, so it means the
+    same thing as in every other driver
   * Documentation: the man page documents exit 20, the location field and
     every field of a reading, and its SEE ALSO names sr(1) rather than a
     sensor-control(1) that does not exist; its header is brought up to this
