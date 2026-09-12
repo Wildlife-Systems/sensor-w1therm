@@ -1,4 +1,4 @@
-.TH SENSOR-W1THERM 1 "January 2026" "sensor-w1therm 1.0" "WildlifeSystems"
+.TH SENSOR-W1THERM 1 "September 2026" "sensor-w1therm 1.2.0" "WildlifeSystems"
 .SH NAME
 sensor-w1therm \- read w1_therm 1-Wire temperature sensors
 .SH SYNOPSIS
@@ -22,7 +22,8 @@ Print version information and exit.
 Returns exit code 60 to identify this sensor type to the WildlifeSystems framework.
 .TP
 .B list
-Lists the measurement types supported by this sensor. Outputs "temperature".
+Lists the measurement types supported by this sensor. Outputs "temperature",
+which is also accepted as a command and is equivalent to \fBall\fR.
 .TP
 .B setup
 Configures all connected sensors for fast reading by setting conversion time
@@ -34,8 +35,8 @@ Enables the 1-Wire interface by adding the w1-gpio device tree overlay to
 privileges. A reboot is required after running this command.
 .TP
 .B mock
-Output mock sensor data for testing without hardware. Returns a fixed value
-(21.375\[de]C) useful for testing data pipelines without physical sensors.
+Output a fixed reading in the real output format, for testing without hardware:
+21.375\[de]C from a DS18B20, at location \fI{{node}}\fR.
 .TP
 .B internal
 Output only readings from sensors marked as internal in the configuration file.
@@ -46,27 +47,37 @@ Output only readings from sensors marked as external (not internal) in the confi
 .B all
 Output all sensor readings (default if no command given).
 .SH OUTPUT FORMAT
-When run without arguments, the command outputs a JSON array containing sensor readings.
-Each sensor reading includes:
+The command outputs a JSON array with one reading per sensor found on the bus.
+Each reading has the fields of the
+.BR sc-prototype (1)
+template. The fields filled in by this driver are as follows.
 .PP
 .RS
 .IP \(bu 2
-sensor: The sensor type (e.g., "ds18b20", "ds1822")
+sensor: the sensor model, from its 1-Wire family code (e.g. "ds18b20", "ds1822")
 .IP \(bu 2
-measures: The measurement type ("temperature")
+device: the same model name
 .IP \(bu 2
-unit: The unit of measurement ("Celsius")
+measures: "temperature"
 .IP \(bu 2
-value: The temperature reading in degrees Celsius
+unit: "Celsius"
 .IP \(bu 2
-sensor_id: The unique 1-Wire device ID (or overridden value from config)
-.IP \\(bu 2
-sensor_name: (optional) Human-readable name from configuration file
-.IP \\(bu 2
-internal: (optional) Boolean indicating if sensor is internal, from configuration file
+value: the temperature, to three decimal places, or null if the reading failed
 .IP \(bu 2
-error: (optional) Error message if reading failed
+error: the reason the reading failed, or null. A reading never has both a value and an error
+.IP \(bu 2
+sensor_id: the 1-Wire device identifier, unless overridden in the configuration file
+.IP \(bu 2
+sensor_name, internal, location: from the configuration file; a sensor without an entry is external and has a null location
+.IP \(bu 2
+timestamp: the Unix time at which the sensor was read
 .RE
+.PP
+The node_id and deployment_id fields are left null and are filled in by
+.BR sr (1).
+A sensor that is found on the bus but cannot be read is reported with a null
+value and the reason in error; a sensor absent from the output was not found on
+the bus at all.
 .SH EXAMPLES
 .TP
 Enable 1-Wire interface (first-time setup, requires reboot):
@@ -100,38 +111,49 @@ or
 Raspberry Pi configuration file where 1-Wire interface is enabled.
 .TP
 .I /etc/ws/sensors/w1therm.json
-Configuration file for sensor settings. This JSON file allows you to override
-sensor properties. Each sensor is identified by its hardware ID (hw_id) and can
-have the following properties overridden:
+The configuration file, which is optional. Every sensor found on the bus is
+reported whether or not it has an entry; an entry matches a sensor by its
+hardware identifier (hw_id) and may set the following properties:
 .RS
-.IP \\(bu 2
-hw_id: The 1-Wire hardware ID to match (e.g., "28-00000a1b2c3d")
-.IP \\(bu 2
-sensor_id: Override the sensor_id in output
-.IP \\(bu 2
-sensor_name: Human-readable name for the sensor
-.IP \\(bu 2
-internal: Boolean (true/false) indicating if the sensor is internal
+.IP \(bu 2
+hw_id: the 1-Wire hardware identifier to match (e.g. "28-00000a1b2c3d")
+.IP \(bu 2
+sensor_id: overrides the sensor_id in the output
+.IP \(bu 2
+sensor_name: a human-readable name, reported in the sensor_name field
+.IP \(bu 2
+internal: whether the sensor is inside the enclosure. The default is false
+.IP \(bu 2
+location: where the sensor is: the string "{{node}}" for the position of the node, "{{none}}" for a sensor that has no position, or an object with latitude and longitude in decimal degrees and, optionally, altitude and accuracy in metres. If omitted, the location field of the reading is null
 .RE
 .PP
-Example configuration:
+An example configuration:
 .RS
 .nf
 [
-  {"hw_id": "28-00000a1b2c3d", "sensor_name": "CPU Temperature", "internal": true},
-  {"hw_id": "28-00000e4f5g6h", "sensor_id": "outdoor_temp", "sensor_name": "Garden", "internal": false}
+  {"hw_id": "28-00000a1b2c3d", "sensor_name": "Enclosure", "internal": true, "location": "{{node}}"},
+  {"hw_id": "28-00000e4f5g6h", "sensor_id": "pond_temp", "sensor_name": "Pond",
+   "location": {"latitude": 51.4967, "longitude": -0.1764, "accuracy": 3.0}}
 ]
 .fi
 .RE
 .SH EXIT STATUS
 .TP
 .B 0
-Success
+Success.
+.TP
+.B 20
+An invalid argument; \fBsetup\fR with no sensors present; or the readings could
+not be produced at all, for example because \fBsc-prototype\fR was unavailable.
+Nothing is printed in that case.
 .TP
 .B 60
-Returned when called with 'identify' option
+The \fBidentify\fR command.
 .SH SEE ALSO
-.BR sensor-control (1)
+.BR sr (1),
+.BR sc-prototype (1),
+.BR sensor-dht11 (1),
+.BR sensor-bme680 (1)
 .SH REFERENCES
 .TP
 Kernel w1_therm driver documentation:

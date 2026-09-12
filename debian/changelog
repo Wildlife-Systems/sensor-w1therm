@@ -1,5 +1,10 @@
 sensor-w1therm (1.2.0) stable; urgency=medium
 
+  * Documentation: the man page documents exit 20, the location field and
+    every field of a reading, and its SEE ALSO names sr(1) rather than a
+    sensor-control(1) that does not exist; its header is brought up to this
+    version. The README gains a Configuration section and a complete output
+    example
   * Remove the MIT LICENSE file. debian/copyright, the README and the source
     header all say GPL-2+, and no other WildlifeSystems package ships a
     LICENSE file; the three that agree are the licence
