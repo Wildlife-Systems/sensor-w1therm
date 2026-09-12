@@ -600,6 +600,13 @@ int main(int argc, char *argv[]) {
         return WS_EXIT_SUCCESS;
     }
 
+    /* Every reading needs the template, so ask once before triggering a
+       conversion. Without it, fail with nothing printed: "[]" would claim
+       the node has no sensors, which the check above has just ruled out. */
+    if (ws_require_prototype() != 0) {
+        return WS_EXIT_INVALID_ARG;
+    }
+
     /* Load config file if it exists */
     configs = load_config(CONFIG_PATH, &config_count);
 

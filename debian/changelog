@@ -1,5 +1,13 @@
 sensor-w1therm (1.2.0) stable; urgency=medium
 
+  * Fail with nothing printed, exit 20, when sc-prototype is unavailable,
+    checked once before any conversion is triggered. Every reading used to be
+    skipped individually and "[]" printed with exit 0, which claims the node
+    has no sensors when it has just found some. This matches sensor-dht11 and
+    sensor-bme680
+  * sensor_id and sensor_name are now escaped, by libwildlifesystems 1.3.0. A
+    quote in either, typed into the config file, ended the JSON string early
+    and invalidated every reading this driver emitted
   * Rebuild against libwildlifesystems 1.3.0, so "{{node}}" in a sensor's
     location resolves to the node's own coordinates from /etc/geolocation
     instead of being emitted as an unresolved token
