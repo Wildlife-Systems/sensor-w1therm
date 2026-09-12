@@ -28,7 +28,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/types.h>
-#include <ctype.h>
 #include <pthread.h>
 #include <ws_utils.h>
 
@@ -40,11 +39,8 @@
 /* Config file path */
 #define CONFIG_PATH "/etc/ws/sensors/w1therm.json"
 
-/* Boot config paths (Raspberry Pi) */
-#define BOOT_CONFIG_PATH "/boot/firmware/config.txt"
-#define BOOT_CONFIG_PATH_LEGACY "/boot/config.txt"
-
-/* w1-gpio overlay configuration */
+/* w1-gpio overlay configuration. The boot config itself is found and
+   edited by libwildlifesystems, which is not 1-Wire specific. */
 #define W1_OVERLAY_LINE "dtoverlay=w1-gpio,gpiopin=17,pullup=1"
 
 /* Version information - passed via -DVERSION from Makefile (extracted from debian/changelog) */
@@ -482,105 +478,6 @@ static void append_sensor_json(ws_json_array_builder_t *out,
 }
 
 /*
- * Check if w1-gpio overlay is already enabled in config.txt
- * Returns: 1 if found, 0 if not found, -1 on error
- */
-static int check_w1_overlay_enabled(const char *config_path) {
-    FILE *fp;
-    char line[MAX_LINE_LEN];
-
-    fp = fopen(config_path, "r");
-    if (!fp) {
-        return -1;
-    }
-
-    while (fgets(line, sizeof(line), fp)) {
-        /* Skip comments and whitespace */
-        char *p = line;
-        while (*p && isspace(*p)) p++;
-        if (*p == '#' || *p == '\0' || *p == '\n') continue;
-
-        /* Check for w1-gpio overlay */
-        if (strstr(p, "dtoverlay=w1-gpio") != NULL) {
-            fclose(fp);
-            return 1;
-        }
-    }
-
-    fclose(fp);
-    return 0;
-}
-
-/*
- * Enable 1-Wire interface by adding overlay to config.txt
- * Returns: 0 on success, 1 on error
- */
-static int enable_w1_interface(void) {
-    const char *config_path = NULL;
-    FILE *fp;
-    int has_all_section = 0;
-    char line[MAX_LINE_LEN];
-
-    /* Check which config file exists */
-    if (access(BOOT_CONFIG_PATH, F_OK) == 0) {
-        config_path = BOOT_CONFIG_PATH;
-    } else if (access(BOOT_CONFIG_PATH_LEGACY, F_OK) == 0) {
-        config_path = BOOT_CONFIG_PATH_LEGACY;
-    } else {
-        fprintf(stderr, "Error: Could not find config.txt at %s or %s\n",
-                BOOT_CONFIG_PATH, BOOT_CONFIG_PATH_LEGACY);
-        return 1;
-    }
-
-    /* Check if already enabled */
-    int status = check_w1_overlay_enabled(config_path);
-    if (status == 1) {
-        printf("1-Wire interface is already enabled in %s\n", config_path);
-        printf("If sensors are not detected, please reboot the system.\n");
-        return 0;
-    }
-    if (status == -1) {
-        fprintf(stderr, "Error: Could not read %s (permission denied?)\n", config_path);
-        return 1;
-    }
-
-    /* Check for [all] section */
-    fp = fopen(config_path, "r");
-    if (fp) {
-        while (fgets(line, sizeof(line), fp)) {
-            char *p = line;
-            while (*p && isspace(*p)) p++;
-            if (strncmp(p, "[all]", 5) == 0) {
-                has_all_section = 1;
-                break;
-            }
-        }
-        fclose(fp);
-    }
-
-    /* Append the overlay configuration */
-    fp = fopen(config_path, "a");
-    if (!fp) {
-        fprintf(stderr, "Error: Could not write to %s (need root?)\n", config_path);
-        return 1;
-    }
-
-    if (!has_all_section) {
-        fprintf(fp, "\n[all]\n");
-    }
-    fprintf(fp, "# 1-Wire interface for temperature sensors (added by sensor-w1therm)\n");
-    fprintf(fp, "%s\n", W1_OVERLAY_LINE);
-    fclose(fp);
-
-    printf("1-Wire interface enabled in %s\n", config_path);
-    printf("\n*** REBOOT REQUIRED ***\n");
-    printf("Please reboot the system for changes to take effect:\n");
-    printf("  sudo reboot\n\n");
-
-    return 0;
-}
-
-/*
  * Find all w1_therm sensor folders
  */
 static int find_sensors(char folders[][MAX_PATH_LEN], int max_count) {
@@ -633,7 +530,10 @@ int main(int argc, char *argv[]) {
             ws_print_version("sensor-w1therm", VERSION);
             return WS_EXIT_SUCCESS;
         } else if (strcmp(argv[1], "enable") == 0) {
-            return enable_w1_interface();
+            return ws_cmd_enable_boot_config(W1_OVERLAY_LINE,
+                                             "dtoverlay=w1-gpio",
+                                             "1-Wire interface",
+                                             "sensor-w1therm");
         } else if (strcmp(argv[1], "internal") == 0) {
             location_filter = WS_LOCATION_INTERNAL;
         } else if (strcmp(argv[1], "external") == 0) {
