@@ -3,6 +3,9 @@ sensor-w1therm (1.2.0) stable; urgency=medium
   * Rebuild against libwildlifesystems 1.3.0, so "{{node}}" in a sensor's
     location resolves to the node's own coordinates from /etc/geolocation
     instead of being emitted as an unresolved token
+  * The boot config handling moves to libwildlifesystems, which is where it
+    belongs: only the overlay line itself was 1-Wire specific. "enable" behaves
+    as before and now returns WS_EXIT_* rather than a bare 1 on failure
   * Build the output array with the library's JSON array builder, replacing the
     hand-placed brackets and the is_first comma flag
   * Use the library's WS_UNIT_* constants rather than unit string literals
