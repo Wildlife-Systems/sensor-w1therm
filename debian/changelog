@@ -1,5 +1,17 @@
 sensor-w1therm (1.2.0) stable; urgency=medium
 
+  * Remove the MIT LICENSE file. debian/copyright, the README and the source
+    header all say GPL-2+, and no other WildlifeSystems package ships a
+    LICENSE file; the three that agree are the licence
+  * Packaging: debhelper-compat 13 in place of debian/compat 11, as every
+    other package; Standards-Version 4.6.1; Homepage and Vcs-Git point at the
+    repository under the organisation's real name; the lintian override for
+    our "stable" distribution; the systemd unit's Documentation= names
+    sensor-w1therm(1), not a sensor-ds18b20(1) that does not exist; the man
+    page is installed once, by the Makefile, rather than also by a manpages
+    file; .gitignore ignores the binary this package builds rather than one
+    called sensor-ds18b20
+  * The bash completion offers "temperature", which the driver accepts
   * The location filter test comes from the library, so the three drivers
     agree on it, and the config path is spelt with WS_CONFIG_PATH
   * Warnings and errors go through the library's logging, so they reach

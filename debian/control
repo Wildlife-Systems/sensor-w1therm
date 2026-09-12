@@ -2,14 +2,15 @@ Source: sensor-w1therm
 Section: misc
 Priority: optional
 Maintainer: Ed Baker <ed@ebaker.me.uk>
-Build-Depends: debhelper (>= 11), libwildlifesystems-dev (>= 1.3.0)
-Standards-Version: 4.5.0
-Homepage: https://wildlife.systems
-Vcs-Git: https://github.com/WildlifeSystems/sensor-w1therm.git
+Build-Depends: debhelper-compat (= 13), libwildlifesystems-dev (>= 1.3.0)
+Standards-Version: 4.6.1
+Homepage: https://github.com/Wildlife-Systems/sensor-w1therm
+Vcs-Git: https://github.com/Wildlife-Systems/sensor-w1therm.git
 
 Package: sensor-w1therm
 Architecture: any
 Depends: ${shlibs:Depends}, ${misc:Depends}, sensor-control (>= 1.3.0)
+Suggests: bash-completion
 Description: w1_therm temperature sensor reader for WildlifeSystems
  A utility to read temperature data from w1_therm 1-Wire temperature
  sensors connected via the Linux kernel w1_therm driver interface.

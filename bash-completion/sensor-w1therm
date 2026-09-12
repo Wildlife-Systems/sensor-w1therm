@@ -7,7 +7,7 @@ _sensor_w1therm() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     # Available commands
-    opts="--version -v version identify list setup enable mock internal external all"
+    opts="--version -v version identify list setup enable mock temperature internal external all"
 
     # Complete with available commands
     if [[ ${COMP_CWORD} -eq 1 ]]; then
