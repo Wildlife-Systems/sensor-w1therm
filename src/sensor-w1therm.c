@@ -62,6 +62,7 @@ typedef struct {
     double temperature;
     int has_error;
     char error_msg[128];
+    time_t timestamp;     /* when the value was obtained, or the read failed */
 } sensor_result_t;
 
 /* Thread arguments */
@@ -412,9 +413,15 @@ static void *read_sensor_thread(void *arg) {
             result->has_error = 1;
             snprintf(result->error_msg, sizeof(result->error_msg),
                      "Failed to read sensor: temperature and w1_slave both unreadable");
+            result->timestamp = time(NULL);
             return NULL;
         }
     }
+
+    /* Stamped here, in the thread that obtained the value, rather than at
+       output time after every thread has been joined. Every driver stamps
+       after its read, so the field means one thing. */
+    result->timestamp = time(NULL);
 
     /* Check for startup value (85.000°C = 85000 millidegrees) */
     if (temp_raw == STARTUP_VALUE_RAW) {
@@ -452,7 +459,6 @@ static void append_sensor_json(ws_json_array_builder_t *out,
     const char *sensor_name = NULL;
     const ws_location_t *location = NULL;
     bool internal = false;
-    time_t now = time(NULL);
 
     /* Determine sensor_id: use config override or default to hardware ID */
     sensor_id_to_use = (config && config->base.sensor_id) ? config->base.sensor_id
@@ -469,7 +475,7 @@ static void append_sensor_json(ws_json_array_builder_t *out,
                                    result->sensor_type, result->sensor_type,
                                    "temperature", WS_UNIT_CELSIUS,
                                    sensor_id_to_use, sensor_name,
-                                   internal, location, now) != 0) {
+                                   internal, location, result->timestamp) != 0) {
         return;
     }
 
