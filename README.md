@@ -52,9 +52,12 @@ This adds the w1-gpio overlay to `/boot/firmware/config.txt`. A reboot is requir
 sensor-w1therm
 ```
 
-Output example:
+The output is a JSON array in the WildlifeSystems format with one reading per
+sensor found on the bus. The `node_id` and `deployment_id` fields are filled in
+by `sr`.
+
 ```json
-[{"sensor":"ds18b20","measures":"temperature","unit":"Celsius","sensor_id":"28-0123456789ab","value":23.500}]
+[{"sensor":"ds18b20","device":"ds18b20","measures":"temperature","value":23.500,"unit":"Celsius","node_id":null,"sensor_id":"28-0123456789ab","sensor_name":null,"location":null,"deployment_id":null,"timestamp":1789225958,"config":null,"internal":false,"error":null}]
 ```
 
 ### Filter by location
@@ -103,6 +106,43 @@ sensor-w1therm version
 ```bash
 sensor-w1therm mock
 ```
+
+## Configuration
+
+Configuration is optional and is read from `/etc/ws/sensors/w1therm.json`. Every
+sensor found on the bus is reported whether or not it has an entry; an entry
+matches a sensor by its 1-Wire hardware identifier and overrides the fields
+below.
+
+```json
+[
+  {
+    "hw_id": "28-00000a1b2c3d",
+    "sensor_name": "Enclosure",
+    "internal": true,
+    "location": "{{node}}"
+  },
+  {
+    "hw_id": "28-00000e4f5g6h",
+    "sensor_id": "pond_temp",
+    "sensor_name": "Pond",
+    "location": { "latitude": 51.4967, "longitude": -0.1764, "accuracy": 3.0 }
+  }
+]
+```
+
+- `hw_id`: the 1-Wire hardware identifier to match, as it appears under
+  `/sys/bus/w1/devices`.
+- `sensor_id`: a custom sensor identifier. If omitted, the hardware identifier
+  is used.
+- `sensor_name`: a human-readable name, reported in the `sensor_name` field.
+- `internal`: whether the sensor is inside the enclosure. The default is
+  false.
+- `location`: where the sensor is. Either `"{{node}}"` for the position of the
+  node, `"{{none}}"` for a sensor that has no position, or an object with
+  `latitude` and `longitude` in decimal degrees and, optionally, `altitude`
+  and `accuracy` in metres. If omitted, the `location` field of the reading is
+  null.
 
 ## Hardware Configuration
 
