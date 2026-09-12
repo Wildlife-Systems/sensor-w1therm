@@ -3,6 +3,9 @@ sensor-w1therm (1.2.0) stable; urgency=medium
   * Rebuild against libwildlifesystems 1.3.0, so "{{node}}" in a sensor's
     location resolves to the node's own coordinates from /etc/geolocation
     instead of being emitted as an unresolved token
+  * Config parsing moves to the library's ws_config_iter_* and the common
+    fields to an embedded ws_sensor_config_base_t, leaving hw_id as the only
+    field this driver declares and parses for itself
   * No longer reports a temperature alongside an error. The DS18B20 power-on
     sentinel (85.000) and the insufficient-power sentinel (127.937) were being
     emitted in "value" next to the error naming them, so a consumer reading
