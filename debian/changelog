@@ -1,5 +1,11 @@
 sensor-w1therm (1.2.0) stable; urgency=medium
 
+  * Warnings and errors go through the library's logging, so they reach
+    syslog as well as stderr, and ws_log_init is called so they carry this
+    driver's name; they were written to stderr alone, where nothing but the
+    per-driver log under /var/log/sensor-control ever saw them
+  * "setup" with no sensors present exits 20, the code every other failure
+    uses, rather than a bare 1
   * Mock readings declare location "{{node}}", as sensor-onboard's mock
     declares its physical sensors, so every driver's mock has one shape.
     They used to emit location null, which is what an unconfigured sensor
