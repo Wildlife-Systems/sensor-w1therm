@@ -3,6 +3,12 @@ sensor-w1therm (1.2.0) stable; urgency=medium
   * Rebuild against libwildlifesystems 1.3.0, so "{{node}}" in a sensor's
     location resolves to the node's own coordinates from /etc/geolocation
     instead of being emitted as an unresolved token
+  * No longer reports a temperature alongside an error. The DS18B20 power-on
+    sentinel (85.000) and the insufficient-power sentinel (127.937) were being
+    emitted in "value" next to the error naming them, so a consumer reading
+    "value" without also checking "error" recorded them as real temperatures.
+    Both are now reported as "value":null, with the sentinel quoted in the
+    error message where it remains useful for diagnosis
   * Require libwildlifesystems-dev (>= 1.3.0). The library is static, so the
     behaviour above is fixed at build time: a binary built against 1.2.0 would
     satisfy the old pin and silently emit unresolved tokens under the same

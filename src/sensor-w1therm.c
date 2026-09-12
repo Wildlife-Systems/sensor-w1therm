@@ -428,16 +428,18 @@ static void *read_sensor_thread(void *arg) {
     /* Check for startup value (85.000°C = 85000 millidegrees) */
     if (temp_raw == STARTUP_VALUE_RAW) {
         result->has_error = 1;
-        snprintf(result->error_msg, sizeof(result->error_msg), "Sensor has startup value.");
-        result->temperature = 85.0;
+        /* The sentinel is diagnostic, not a temperature, so it is named in the
+           message rather than reported as the reading. */
+        snprintf(result->error_msg, sizeof(result->error_msg),
+                 "Sensor has startup value (%.3f C)", (double)temp_raw / 1000.0);
         return NULL;
     }
 
     /* Check for insufficient power value (127.937°C) */
     if (temp_raw == INSUFFICIENT_POWER_RAW) {
         result->has_error = 1;
-        snprintf(result->error_msg, sizeof(result->error_msg), "Insufficient power");
-        result->temperature = (double)temp_raw / 1000.0;
+        snprintf(result->error_msg, sizeof(result->error_msg),
+                 "Insufficient power (%.3f C)", (double)temp_raw / 1000.0);
         return NULL;
     }
 
@@ -481,11 +483,9 @@ static void print_sensor_json(const sensor_result_t *result, int is_first, senso
         return;
     }
 
-    /* Add value or error */
-    if (result->has_error) {
-        ws_sensor_json_set_error(json, result->error_msg);
-    }
-    ws_sensor_json_set_value(json, result->temperature, 3);
+    /* Exactly one of value or error: a sentinel must not reach "value". */
+    ws_sensor_json_set_result(json, sizeof(json), result->temperature, 3,
+                              result->has_error ? result->error_msg : NULL);
 
     printf("%s", json);
 }
