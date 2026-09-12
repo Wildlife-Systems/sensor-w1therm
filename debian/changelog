@@ -1,5 +1,9 @@
 sensor-w1therm (1.2.0) stable; urgency=medium
 
+  * Mock readings declare location "{{node}}", as sensor-onboard's mock
+    declares its physical sensors, so every driver's mock has one shape.
+    They used to emit location null, which is what an unconfigured sensor
+    reports, and so disagreed with the shell driver's mock
   * A sensor that cannot be read is emitted with "value":null and the reason in
     "error", as sensor-dht11 and sensor-bme680 do, rather than dropped with a
     warning on stderr. Dropping it made a failed probe indistinguishable from

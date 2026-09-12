@@ -555,8 +555,9 @@ int main(int argc, char *argv[]) {
                so mock cannot drift from what a real read produces. */
             static const ws_mock_reading_t mock[] = {
                 /* One measurement per sensor, so the real path suffixes
-                   nothing and neither does mock. */
-                { "ds18b20", "temperature", "", WS_UNIT_CELSIUS, 21.375, 3 },
+                   nothing and neither does mock. Declared at the node, as
+                   sensor-onboard's mock declares its physical sensors. */
+                { "ds18b20", "temperature", "", WS_UNIT_CELSIUS, 21.375, 3, "{{node}}" },
             };
             return ws_cmd_mock("ds18b20", "w1therm_mock", "Mock DS18B20",
                                mock, sizeof(mock) / sizeof(mock[0]));
