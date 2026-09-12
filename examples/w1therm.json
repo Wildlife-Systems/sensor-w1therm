@@ -1,13 +1,20 @@
 [
   {
     "hw_id": "28-00000a1b2c3d",
-    "sensor_name": "Internal Temperature",
-    "internal": true
+    "sensor_name": "Enclosure",
+    "internal": true,
+    "location": "{{node}}"
   },
   {
     "hw_id": "28-00000e4f5g6h",
-    "sensor_id": "outdoor_temp",
-    "sensor_name": "Garden Sensor",
-    "internal": false
+    "sensor_id": "pond_temp",
+    "sensor_name": "Pond",
+    "internal": false,
+    "location": { "latitude": 51.4967, "longitude": -0.1764, "accuracy": 3.0 }
+  },
+  {
+    "hw_id": "28-00000c0ffee0",
+    "sensor_name": "Soil probe",
+    "location": "{{none}}"
   }
 ]

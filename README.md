@@ -144,6 +144,10 @@ below.
   and `accuracy` in metres. If omitted, the `location` field of the reading is
   null.
 
+An example showing every option in use is installed as
+`/usr/share/doc/sensor-w1therm/examples/w1therm.json`; it is valid JSON and can
+be copied into place and edited.
+
 ## Hardware Configuration
 
 1. Enable 1-Wire interface:

@@ -1,5 +1,7 @@
 sensor-w1therm (1.2.0) stable; urgency=medium
 
+  * The example configuration shows location in each of its three forms; it
+    was the one shipped example still without it
   * A reading's timestamp is taken in the thread that obtained the value,
     not at output time after every thread has been joined, so it means the
     same thing as in every other driver
