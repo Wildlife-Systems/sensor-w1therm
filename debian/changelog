@@ -3,6 +3,10 @@ sensor-w1therm (1.2.0) stable; urgency=medium
   * Rebuild against libwildlifesystems 1.3.0, so "{{node}}" in a sensor's
     location resolves to the node's own coordinates from /etc/geolocation
     instead of being emitted as an unresolved token
+  * "mock" is a table of values passed to the library rather than hand-built
+    JSON, so it cannot drift from the real output format. It also gains the
+    missing-serial fallback the other drivers had, having previously emitted
+    "sensor_id":null on a host with no Pi serial
   * The boot config handling moves to libwildlifesystems, which is where it
     belongs: only the overlay line itself was 1-Wire specific. "enable" behaves
     as before and now returns WS_EXIT_* rather than a bare 1 on failure

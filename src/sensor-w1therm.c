@@ -541,18 +541,16 @@ int main(int argc, char *argv[]) {
         } else if (strcmp(argv[1], "setup") == 0) {
             /* Handled below after finding sensors */
         } else if (strcmp(argv[1], "mock") == 0) {
-            /* Output mock data for testing without hardware */
-            char *serial = ws_get_serial_with_suffix("w1therm_mock");
-            time_t now = time(NULL);
-            char json[2048];
-            if (ws_build_sensor_json_base(json, sizeof(json), "ds18b20", "ds18b20",
-                                          "temperature", WS_UNIT_CELSIUS,
-                                          serial, "Mock DS18B20", false, NULL, now) == 0) {
-                ws_sensor_json_set_value(json, 21.375, 3);
-                printf("[%s]\n", json);
-            }
-            free(serial);
-            return WS_EXIT_SUCCESS;
+            /* Fixed reading in the real output format, for testing without
+               hardware. The value is ours; the formatting is the library's,
+               so mock cannot drift from what a real read produces. */
+            static const ws_mock_reading_t mock[] = {
+                /* One measurement per sensor, so the real path suffixes
+                   nothing and neither does mock. */
+                { "ds18b20", "temperature", "", WS_UNIT_CELSIUS, 21.375, 3 },
+            };
+            return ws_cmd_mock("ds18b20", "w1therm_mock", "Mock DS18B20",
+                               mock, sizeof(mock) / sizeof(mock[0]));
         } else if (strcmp(argv[1], "all") != 0) {
             fprintf(stderr, "Unknown command: %s\n", argv[1]);
             fprintf(stderr, "Usage: sensor-w1therm [--version|identify|list|setup|enable|mock|internal|external|all]\n");
