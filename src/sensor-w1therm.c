@@ -37,7 +37,7 @@
 #define MAX_LINE_LEN 256
 
 /* Config file path */
-#define CONFIG_PATH "/etc/ws/sensors/w1therm.json"
+#define CONFIG_PATH WS_CONFIG_PATH("w1therm")
 
 /* w1-gpio overlay configuration. The boot config itself is found and
    edited by libwildlifesystems, which is not 1-Wire specific. */
@@ -684,12 +684,10 @@ int main(int argc, char *argv[]) {
         /* Find config for this sensor */
         sensor_config_t *sensor_cfg = find_sensor_config(configs, config_count, results[i].sensor_id);
 
-        /* Apply location filter */
-        if (location_filter == WS_LOCATION_INTERNAL && (!sensor_cfg || !sensor_cfg->base.internal)) {
-            continue;  /* Skip non-internal sensors */
-        }
-        if (location_filter == WS_LOCATION_EXTERNAL && sensor_cfg && sensor_cfg->base.internal) {
-            continue;  /* Skip internal sensors */
+        /* Apply location filter. A sensor with no config entry is external. */
+        if (!ws_location_filter_matches(location_filter,
+                                        sensor_cfg && sensor_cfg->base.internal)) {
+            continue;
         }
 
         /* Emitted whether or not the read succeeded; a failure carries its
