@@ -525,6 +525,10 @@ int main(int argc, char *argv[]) {
     sensor_config_t *configs = NULL;
     int config_count = 0;
 
+    /* So warnings reach syslog under this driver's name, as sensor-dht11's
+       do; this driver's own warnings went to stderr alone. */
+    ws_log_init("sensor-w1therm");
+
     /* Handle command-line arguments */
     if (argc > 1) {
         if (strcmp(argv[1], "identify") == 0) {
@@ -576,8 +580,8 @@ int main(int argc, char *argv[]) {
      */
     if (argc > 1 && strcmp(argv[1], "setup") == 0) {
         if (sensor_count == 0) {
-            fprintf(stderr, "No sensors found to configure.\n");
-            return 1;
+            ws_log_error("No sensors found to configure");
+            return WS_EXIT_INVALID_ARG;
         }
         printf("Configuring %d sensor(s) for optimized reading...\n", sensor_count);
         for (i = 0; i < sensor_count; i++) {
@@ -600,7 +604,7 @@ int main(int argc, char *argv[]) {
 
     if (sensor_count == 0) {
         printf("[]\n");
-        fprintf(stderr, "Warning: No w1_therm sensors detected. Please check your wiring and ensure 1-Wire is enabled.\n");
+        ws_log_warning("No w1_therm sensors detected. Please check your wiring and ensure 1-Wire is enabled");
         return WS_EXIT_SUCCESS;
     }
 
@@ -638,7 +642,7 @@ int main(int argc, char *argv[]) {
         /* Trigger bulk conversion on all masters - this blocks until complete */
         for (i = 0; i < master_count; i++) {
             if (trigger_bulk_read(masters[i]) != 0) {
-                fprintf(stderr, "Warning: Failed to trigger bulk read on %s (may need root)\n", masters[i]);
+                ws_log_warning("Failed to trigger bulk read on %s (may need root)", masters[i]);
             }
         }
     }
@@ -671,7 +675,7 @@ int main(int argc, char *argv[]) {
 
     /* Output JSON array */
     if (ws_json_array_init(&out) != 0) {
-        fprintf(stderr, "Memory allocation failed\n");
+        ws_log_error("Out of memory building readings");
         free_config(configs, config_count);
         return WS_EXIT_INVALID_ARG;
     }
@@ -697,7 +701,7 @@ int main(int argc, char *argv[]) {
     if (ws_json_array_get(&out)) {
         printf("%s\n", ws_json_array_get(&out));
     } else {
-        fprintf(stderr, "Memory allocation failed\n");
+        ws_log_error("Out of memory building readings");
     }
     ws_json_array_free(&out);
 
