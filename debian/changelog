@@ -1,5 +1,7 @@
 sensor-w1therm (1.2.0) stable; urgency=medium
 
+  * The location filter test comes from the library, so the three drivers
+    agree on it, and the config path is spelt with WS_CONFIG_PATH
   * Warnings and errors go through the library's logging, so they reach
     syslog as well as stderr, and ws_log_init is called so they carry this
     driver's name; they were written to stderr alone, where nothing but the
